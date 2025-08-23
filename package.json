@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "generate-secret": "node generate-secret.js"
+    "generate-secret": "node generate-secret.js",
+    "test-monitor": "node test-stream-monitor.js",
+    "monitor": "node monitor-streams.js",
+    "test": "node test-stream-monitor.js"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

@@ -18,6 +18,8 @@ const Video = require('../models/Video');
 const activeStreams = new Map();
 const streamLogs = new Map();
 const streamRetryCount = new Map();
+const streamStartTimes = new Map(); // Track actual start time for each stream
+const streamTotalRuntime = new Map(); // Track total runtime across restarts
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 100;
@@ -34,6 +36,58 @@ function addStreamLog(streamId, message) {
     logs.shift();
   }
 }
+
+// Function to check if a process is actually running
+function isProcessRunning(process) {
+  try {
+    // On Windows, we need to check differently
+    if (process.platform === 'win32') {
+      // For Windows, we'll use a different approach
+      return process.exitCode === null && !process.killed;
+    } else {
+      // On Unix-like systems, we can check the process
+      return process.exitCode === null && !process.killed;
+    }
+  } catch (error) {
+    return false;
+  }
+}
+
+// Function to safely kill a process and wait for it to terminate
+async function safeKillProcess(process, streamId) {
+  return new Promise((resolve) => {
+    if (!process || !isProcessRunning(process)) {
+      resolve();
+      return;
+    }
+
+    try {
+      process.kill('SIGTERM');
+      
+      // Wait up to 5 seconds for graceful termination
+      const timeout = setTimeout(() => {
+        try {
+          if (isProcessRunning(process)) {
+            process.kill('SIGKILL');
+            addStreamLog(streamId, 'Force killed FFmpeg process after timeout');
+          }
+        } catch (error) {
+          addStreamLog(streamId, `Error force killing process: ${error.message}`);
+        }
+        resolve();
+      }, 5000);
+
+      process.once('exit', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    } catch (error) {
+      addStreamLog(streamId, `Error killing process: ${error.message}`);
+      resolve();
+    }
+  });
+}
+
 async function buildFFmpegArgs(stream) {
   const video = await Video.findById(stream.video_id);
   if (!video) {
@@ -95,23 +149,57 @@ async function buildFFmpegArgs(stream) {
 }
 async function startStream(streamId) {
   try {
-    streamRetryCount.set(streamId, 0);
+    // Check if stream is already active and kill any existing process
     if (activeStreams.has(streamId)) {
-      return { success: false, error: 'Stream is already active' };
+      const existingProcess = activeStreams.get(streamId);
+      console.log(`[StreamingService] Stream ${streamId} already has an active process, killing existing one...`);
+      addStreamLog(streamId, 'Killing existing FFmpeg process before starting new one');
+      await safeKillProcess(existingProcess, streamId);
+      activeStreams.delete(streamId);
     }
+
+    // Reset retry count for new start attempt
+    streamRetryCount.set(streamId, 0);
+    
     const stream = await Stream.findById(streamId);
     if (!stream) {
       return { success: false, error: 'Stream not found' };
     }
+
+    // Track start time and calculate remaining duration
+    const now = new Date();
+    const totalRuntime = streamTotalRuntime.get(streamId) || 0;
+    const originalDuration = stream.duration ? stream.duration * 60 * 1000 : null; // Convert to milliseconds
+    
+    if (originalDuration && totalRuntime >= originalDuration) {
+      console.log(`[StreamingService] Stream ${streamId} has already exceeded its total duration (${totalRuntime}ms >= ${originalDuration}ms)`);
+      addStreamLog(streamId, `Stream exceeded total duration, not restarting`);
+      await Stream.updateStatus(streamId, 'offline', stream.user_id);
+      return { success: false, error: 'Stream duration exceeded' };
+    }
+
+    // Calculate remaining duration
+    let remainingDuration = null;
+    if (originalDuration) {
+      remainingDuration = Math.max(0, originalDuration - totalRuntime);
+      console.log(`[StreamingService] Stream ${streamId} - Total runtime: ${Math.floor(totalRuntime/60000)}min, Remaining: ${Math.floor(remainingDuration/60000)}min`);
+      addStreamLog(streamId, `Starting stream with ${Math.floor(remainingDuration/60000)} minutes remaining out of ${stream.duration} total`);
+    }
+
     const ffmpegArgs = await buildFFmpegArgs(stream);
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
     addStreamLog(streamId, `Starting stream with command: ${fullCommand}`);
     console.log(`Starting stream: ${fullCommand}`);
+
     const ffmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
+
+    // Track start time for this session
+    streamStartTimes.set(streamId, now.getTime());
     activeStreams.set(streamId, ffmpegProcess);
+    
     await Stream.updateStatus(streamId, 'live', stream.user_id);
     ffmpegProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
@@ -132,8 +220,22 @@ async function startStream(streamId) {
     ffmpegProcess.on('exit', async (code, signal) => {
       addStreamLog(streamId, `Stream ended with code ${code}, signal: ${signal}`);
       console.log(`[FFMPEG_EXIT] ${streamId}: Code=${code}, Signal=${signal}`);
+      
+      // Calculate runtime for this session and add to total
+      const sessionStartTime = streamStartTimes.get(streamId);
+      if (sessionStartTime) {
+        const sessionRuntime = Date.now() - sessionStartTime;
+        const currentTotal = streamTotalRuntime.get(streamId) || 0;
+        streamTotalRuntime.set(streamId, currentTotal + sessionRuntime);
+        streamStartTimes.delete(streamId);
+        
+        console.log(`[StreamingService] Stream ${streamId} session runtime: ${Math.floor(sessionRuntime/60000)}min, Total runtime: ${Math.floor((currentTotal + sessionRuntime)/60000)}min`);
+        addStreamLog(streamId, `Session runtime: ${Math.floor(sessionRuntime/60000)}min, Total runtime: ${Math.floor((currentTotal + sessionRuntime)/60000)}min`);
+      }
+      
       const wasActive = activeStreams.delete(streamId);
       const isManualStop = manuallyStoppingStreams.has(streamId);
+      
       if (isManualStop) {
         console.log(`[StreamingService] Stream ${streamId} was manually stopped, not restarting`);
         manuallyStoppingStreams.delete(streamId);
@@ -149,6 +251,27 @@ async function startStream(streamId) {
         }
         return;
       }
+
+      // Check if stream has exceeded total duration
+      const totalRuntime = streamTotalRuntime.get(streamId) || 0;
+      const stream = await Stream.findById(streamId);
+      if (stream && stream.duration) {
+        const maxDurationMs = stream.duration * 60 * 1000;
+        if (totalRuntime >= maxDurationMs) {
+          console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(totalRuntime/60000)}min >= ${stream.duration}min), not restarting`);
+          addStreamLog(streamId, `Stream exceeded total duration, not restarting`);
+          try {
+            await Stream.updateStatus(streamId, 'offline');
+            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+              schedulerService.handleStreamStopped(streamId);
+            }
+          } catch (error) {
+            console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+          }
+          return;
+        }
+      }
+
       if (signal === 'SIGSEGV') {
         const retryCount = streamRetryCount.get(streamId) || 0;
         if (retryCount < MAX_RETRY_ATTEMPTS) {
@@ -234,13 +357,23 @@ async function startStream(streamId) {
       }
     });
     ffmpegProcess.unref();
-    if (stream.duration && typeof schedulerService !== 'undefined') {
+    
+    // Schedule termination with remaining duration instead of original duration
+    if (remainingDuration && typeof schedulerService !== 'undefined') {
+      const remainingMinutes = Math.ceil(remainingDuration / 60000);
+      console.log(`[StreamingService] Scheduling stream ${streamId} termination after ${remainingMinutes} minutes (remaining)`);
+      addStreamLog(streamId, `Scheduled termination after ${remainingMinutes} minutes (remaining)`);
+      schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
+    } else if (stream.duration && typeof schedulerService !== 'undefined') {
+      // Fallback to original duration if no remaining duration calculated
       schedulerService.scheduleStreamTermination(streamId, stream.duration);
     }
+    
     return {
       success: true,
       message: 'Stream started successfully',
-      isAdvancedMode: stream.use_advanced_settings
+      isAdvancedMode: stream.use_advanced_settings,
+      remainingDuration: remainingDuration ? Math.ceil(remainingDuration / 60000) : null
     };
   } catch (error) {
     addStreamLog(streamId, `Failed to start stream: ${error.message}`);
@@ -340,19 +473,58 @@ function getActiveStreams() {
 function getStreamLogs(streamId) {
   return streamLogs.get(streamId) || [];
 }
+
+// Function to get current stream runtime information
+function getStreamRuntimeInfo(streamId) {
+  const sessionStartTime = streamStartTimes.get(streamId);
+  const totalRuntime = streamTotalRuntime.get(streamId) || 0;
+  
+  let currentSessionRuntime = 0;
+  if (sessionStartTime) {
+    currentSessionRuntime = Date.now() - sessionStartTime;
+  }
+  
+  return {
+    currentSessionRuntime,
+    totalRuntime,
+    currentSessionRuntimeMinutes: Math.floor(currentSessionRuntime / 60000),
+    totalRuntimeMinutes: Math.floor(totalRuntime / 60000)
+  };
+}
+
+// Function to reset stream runtime (useful for manual resets)
+function resetStreamRuntime(streamId) {
+  streamTotalRuntime.delete(streamId);
+  streamStartTimes.delete(streamId);
+  streamRetryCount.delete(streamId);
+  console.log(`[StreamingService] Reset runtime tracking for stream ${streamId}`);
+}
+
 async function saveStreamHistory(stream) {
   try {
     if (!stream.start_time) {
       console.log(`[StreamingService] Not saving history for stream ${stream.id} - no start time recorded`);
       return false;
     }
-    const startTime = new Date(stream.start_time);
-    const endTime = stream.end_time ? new Date(stream.end_time) : new Date();
-    const durationSeconds = Math.floor((endTime - startTime) / 1000);
+    
+    // Use tracked runtime if available, otherwise calculate from start/end times
+    let durationSeconds = 0;
+    const trackedRuntime = streamTotalRuntime.get(stream.id);
+    
+    if (trackedRuntime) {
+      durationSeconds = Math.floor(trackedRuntime / 1000);
+      console.log(`[StreamingService] Using tracked runtime for stream ${stream.id}: ${durationSeconds}s`);
+    } else {
+      const startTime = new Date(stream.start_time);
+      const endTime = stream.end_time ? new Date(stream.end_time) : new Date();
+      durationSeconds = Math.floor((endTime - startTime) / 1000);
+    }
+    
     if (durationSeconds < 1) {
       console.log(`[StreamingService] Not saving history for stream ${stream.id} - duration too short (${durationSeconds}s)`);
       return false;
     }
+    
     const videoDetails = stream.video_id ? await Video.findById(stream.video_id) : null;
     const historyData = {
       id: uuidv4(),
@@ -371,6 +543,7 @@ async function saveStreamHistory(stream) {
       use_advanced_settings: stream.use_advanced_settings ? 1 : 0,
       user_id: stream.user_id
     };
+    
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO stream_history (
@@ -399,6 +572,7 @@ async function saveStreamHistory(stream) {
     return false;
   }
 }
+
 module.exports = {
   startStream,
   stopStream,
@@ -406,6 +580,8 @@ module.exports = {
   getActiveStreams,
   getStreamLogs,
   syncStreamStatuses,
-  saveStreamHistory
+  saveStreamHistory,
+  getStreamRuntimeInfo,
+  resetStreamRuntime
 };
 schedulerService.init(module.exports);

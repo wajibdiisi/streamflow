@@ -1466,6 +1466,106 @@ app.get('/api/streams/:id/logs', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch stream logs' });
   }
 });
+
+// New endpoint for monitoring stream runtime
+app.get('/api/streams/:id/runtime', isAuthenticated, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ success: false, error: 'Stream not found' });
+    }
+    if (stream.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    
+    const runtimeInfo = streamingService.getStreamRuntimeInfo(streamId);
+    const isActive = streamingService.isStreamActive(streamId);
+    const scheduledTerminations = schedulerService.getScheduledTerminations();
+    
+    res.json({
+      success: true,
+      runtimeInfo,
+      isActive,
+      hasScheduledTermination: scheduledTerminations[streamId]?.hasScheduledTermination || false,
+      stream: {
+        id: stream.id,
+        title: stream.title,
+        duration: stream.duration,
+        start_time: stream.start_time,
+        status: stream.status
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching stream runtime:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch stream runtime' });
+  }
+});
+
+// New endpoint for resetting stream runtime (for debugging)
+app.post('/api/streams/:id/reset-runtime', isAuthenticated, async (req, res) => {
+  try {
+    const streamId = req.params.id;
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ success: false, error: 'Stream not found' });
+    }
+    if (stream.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+    
+    // Stop the stream if it's active
+    if (streamingService.isStreamActive(streamId)) {
+      await streamingService.stopStream(streamId);
+    }
+    
+    // Reset runtime tracking
+    streamingService.resetStreamRuntime(streamId);
+    
+    res.json({
+      success: true,
+      message: 'Stream runtime reset successfully'
+    });
+  } catch (error) {
+    console.error('Error resetting stream runtime:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset stream runtime' });
+  }
+});
+
+// New endpoint for getting all active streams with runtime info
+app.get('/api/streams/active/status', isAuthenticated, async (req, res) => {
+  try {
+    const activeStreamIds = streamingService.getActiveStreams();
+    const activeStreams = [];
+    
+    for (const streamId of activeStreamIds) {
+      const stream = await Stream.findById(streamId);
+      if (stream && stream.user_id === req.session.userId) {
+        const runtimeInfo = streamingService.getStreamRuntimeInfo(streamId);
+        const scheduledTerminations = schedulerService.getScheduledTerminations();
+        
+        activeStreams.push({
+          id: stream.id,
+          title: stream.title,
+          duration: stream.duration,
+          start_time: stream.start_time,
+          runtimeInfo,
+          hasScheduledTermination: scheduledTerminations[streamId]?.hasScheduledTermination || false
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      activeStreams,
+      count: activeStreams.length
+    });
+  } catch (error) {
+    console.error('Error fetching active streams status:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch active streams status' });
+  }
+});
+
 app.get('/api/server-time', (req, res) => {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
