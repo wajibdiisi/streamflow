@@ -1,5 +1,6 @@
 const Stream = require('../models/Stream');
 const scheduledTerminations = new Map();
+const streamsBeingStopped = new Set(); // Track streams that are currently being stopped
 const SCHEDULE_LOOKAHEAD_SECONDS = 60;
 let streamingService = null;
 
@@ -51,14 +52,36 @@ async function checkStreamDurations() {
     }
     const liveStreams = await Stream.findAll(null, 'live');
     for (const stream of liveStreams) {
-      if (stream.duration && stream.start_time && !scheduledTerminations.has(stream.id)) {
+      // Skip if stream is already being stopped
+      if (streamsBeingStopped.has(stream.id)) {
+        console.log(`Stream ${stream.id} is already being stopped, skipping...`);
+        continue;
+      }
+      
+      // Skip if stream already has scheduled termination
+      if (scheduledTerminations.has(stream.id)) {
+        continue;
+      }
+      
+      if (stream.duration && stream.start_time) {
         // Get runtime info from streaming service
         const runtimeInfo = streamingService.getStreamRuntimeInfo ? 
           streamingService.getStreamRuntimeInfo(stream.id) : null;
         
         if (runtimeInfo && runtimeInfo.totalRuntimeMinutes >= stream.duration) {
           console.log(`Stream ${stream.id} exceeded duration (${runtimeInfo.totalRuntimeMinutes}min >= ${stream.duration}min), stopping now`);
-          await streamingService.stopStream(stream.id);
+          
+          // Mark stream as being stopped to prevent duplicate attempts
+          streamsBeingStopped.add(stream.id);
+          
+          try {
+            await streamingService.stopStream(stream.id);
+            console.log(`Successfully stopped stream ${stream.id} due to duration limit`);
+          } catch (error) {
+            console.error(`Failed to stop stream ${stream.id}:`, error);
+            // Remove from being stopped set if failed
+            streamsBeingStopped.delete(stream.id);
+          }
         } else if (runtimeInfo) {
           // Calculate remaining time based on tracked runtime
           const remainingMinutes = Math.max(0, stream.duration - runtimeInfo.totalRuntimeMinutes);
@@ -74,7 +97,18 @@ async function checkStreamDurations() {
           const now = new Date();
           if (shouldEndAt <= now) {
             console.log(`Stream ${stream.id} exceeded duration, stopping now`);
-            await streamingService.stopStream(stream.id);
+            
+            // Mark stream as being stopped to prevent duplicate attempts
+            streamsBeingStopped.add(stream.id);
+            
+            try {
+              await streamingService.stopStream(stream.id);
+              console.log(`Successfully stopped stream ${stream.id} due to duration limit (fallback method)`);
+            } catch (error) {
+              console.error(`Failed to stop stream ${stream.id}:`, error);
+              // Remove from being stopped set if failed
+              streamsBeingStopped.delete(stream.id);
+            }
           } else {
             const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
             scheduleStreamTermination(stream.id, timeUntilEnd / 60000);
@@ -121,6 +155,8 @@ function cancelStreamTermination(streamId) {
 }
 
 function handleStreamStopped(streamId) {
+  // Remove from being stopped set when stream is successfully stopped
+  streamsBeingStopped.delete(streamId);
   return cancelStreamTermination(streamId);
 }
 

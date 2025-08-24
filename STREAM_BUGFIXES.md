@@ -1,195 +1,106 @@
-# Stream Bug Fixes & Improvements
+# Stream Bug Fixes - August 24, 2025
 
-## Masalah yang Diperbaiki
+## Issues Fixed
 
-### 1. Duplikasi FFmpeg Process
-**Masalah**: Ketika ffmpeg crash dan restart, terkadang process lama masih berjalan sehingga terjadi duplikasi.
+### 1. Stream Cannot Be Stopped (Duration Exceeded)
+**Problem**: Stream yang sudah melebihi durasi maksimum tidak bisa dihentikan, menyebabkan program mencoba menghentikan stream yang sama berkali-kali.
 
-**Solusi**:
-- Menambahkan pengecekan process yang sedang berjalan sebelum start stream baru
-- Implementasi `safeKillProcess()` untuk memastikan process lama benar-benar berhenti
-- Menambahkan tracking untuk active streams dengan Map
+**Root Cause**: 
+- Race condition di `checkStreamDurations()` yang dipanggil setiap menit
+- Tidak ada flag untuk mencegah multiple stop attempts
+- FFmpeg process tidak benar-benar berhenti meskipun sudah dikirim signal
 
-### 2. Timer Reset Setiap Restart
-**Masalah**: Setiap kali stream restart karena crash, timer durasi di-reset dari awal, sehingga total durasi menjadi jauh lebih besar dari yang diinginkan.
+**Solution**:
+- Menambahkan `streamsBeingStopped` Set untuk track stream yang sedang dihentikan
+- Mencegah duplicate stop attempts dengan flag checking
+- Memperbaiki process killing dengan timeout dan fallback ke SIGKILL
+- Menambahkan event listener untuk process exit
 
-**Solusi**:
-- Implementasi runtime tracking yang melacak total waktu stream berjalan
-- Menyimpan runtime kumulatif di `streamTotalRuntime` Map
-- Menghitung remaining duration berdasarkan total runtime yang sudah berjalan
-- Timer termination di-schedule berdasarkan remaining duration, bukan original duration
+### 2. Inconsistent Stream Status
+**Problem**: Stream ditandai sebagai 'live' di database tapi tidak aktif di memory, atau sebaliknya.
 
-### 3. Stream Tidak Berhenti Setelah Durasi Habis
-**Masalah**: Karena timer reset, stream bisa berjalan terus meskipun sudah melebihi durasi yang ditentukan.
+**Root Cause**:
+- Stream status tidak sinkron antara memory dan database
+- Cleanup tidak lengkap ketika process exit unexpectedly
+- Tidak ada handling untuk orphaned processes
 
-**Solusi**:
-- Pengecekan total runtime sebelum restart stream
-- Stream tidak akan restart jika sudah melebihi total durasi
-- Integrasi dengan scheduler service untuk monitoring durasi yang lebih akurat
+**Solution**:
+- Memperbaiki `syncStreamStatuses()` dengan better cleanup logic
+- Menambahkan `cleanupZombieProcesses()` untuk membersihkan dead processes
+- Menambahkan process exit event listeners
+- Better handling untuk streams yang sedang dihentikan
 
-## Fitur Baru yang Ditambahkan
+### 3. Duplicate Stop Attempts
+**Problem**: Program mencoba menghentikan stream yang sama berkali-kali dalam interval yang pendek.
 
-### 1. Runtime Tracking System
-```javascript
-// Tracking runtime per session dan total
-const streamStartTimes = new Map(); // Waktu start per session
-const streamTotalRuntime = new Map(); // Total runtime kumulatif
-```
+**Root Cause**:
+- `checkStreamDurations()` tidak memeriksa apakah stream sudah dihentikan
+- Tidak ada debouncing mechanism
 
-### 2. Process Management yang Lebih Baik
-```javascript
-// Fungsi untuk memastikan process lama berhenti
-async function safeKillProcess(process, streamId) {
-  // Graceful termination dengan timeout
-  // Force kill jika diperlukan
-}
-```
+**Solution**:
+- Menambahkan flag `streamsBeingStopped` untuk mencegah duplicate attempts
+- Skip streams yang sudah memiliki scheduled termination
+- Better error handling dan cleanup
 
-### 3. API Endpoints Baru
-- `/api/streams/:id/runtime` - Mendapatkan informasi runtime stream
-- `/api/streams/:id/reset-runtime` - Reset timer stream (untuk debugging)
-- `/api/streams/active/status` - Status semua stream aktif dengan runtime info
+## Code Changes Made
 
-### 4. Frontend Monitoring
-- File `public/js/stream-monitor.js` untuk monitoring real-time
-- Display runtime information di dashboard
-- Tombol reset timer untuk debugging
-- Status indicators dengan warna yang berbeda
+### services/schedulerService.js
+- Menambahkan `streamsBeingStopped` Set
+- Memperbaiki `checkStreamDurations()` dengan duplicate prevention
+- Better error handling untuk stop attempts
 
-## Cara Kerja Sistem Baru
+### services/streamingService.js
+- Memperbaiki `stopStream()` dengan better process management
+- Menambahkan process exit event listeners
+- Memperbaiki `syncStreamStatuses()` dengan comprehensive cleanup
+- Menambahkan `cleanupZombieProcesses()` function
+- Better memory cleanup untuk stopped streams
 
-### 1. Start Stream
-```javascript
-// 1. Cek apakah ada process lama yang masih berjalan
-if (activeStreams.has(streamId)) {
-  await safeKillProcess(existingProcess, streamId);
-}
+### force-stop-streams.js (New File)
+- Script untuk force stop semua stream yang sedang berjalan
+- Kill FFmpeg processes secara paksa
+- Update database status ke offline
 
-// 2. Hitung remaining duration
-const totalRuntime = streamTotalRuntime.get(streamId) || 0;
-const remainingDuration = Math.max(0, originalDuration - totalRuntime);
+## How to Use
 
-// 3. Schedule termination dengan remaining duration
-schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
-```
-
-### 2. Runtime Tracking
-```javascript
-// Setiap session stream
-ffmpegProcess.on('exit', async (code, signal) => {
-  // Hitung runtime session ini
-  const sessionRuntime = Date.now() - sessionStartTime;
-  
-  // Tambahkan ke total runtime
-  const currentTotal = streamTotalRuntime.get(streamId) || 0;
-  streamTotalRuntime.set(streamId, currentTotal + sessionRuntime);
-  
-  // Cek apakah sudah melebihi total durasi
-  if (totalRuntime >= maxDurationMs) {
-    // Jangan restart, stop stream
-    return;
-  }
-});
-```
-
-### 3. Scheduler Integration
-```javascript
-// Scheduler menggunakan runtime tracking untuk durasi yang akurat
-const runtimeInfo = streamingService.getStreamRuntimeInfo(streamId);
-if (runtimeInfo && runtimeInfo.totalRuntimeMinutes >= stream.duration) {
-  // Stream sudah melebihi durasi, stop sekarang
-  await streamingService.stopStream(streamId);
-}
-```
-
-## Monitoring dan Debugging
-
-### 1. Logs yang Ditingkatkan
-- Tracking runtime per session dan total
-- Informasi remaining duration
-- Process management logs
-
-### 2. Frontend Monitoring
-- Real-time runtime display
-- Status indicators dengan warna
-- Tombol reset untuk debugging
-
-### 3. API Monitoring
+### 1. Apply the Fixes
+Restart streaming service setelah menerapkan perbaikan:
 ```bash
-# Cek runtime stream tertentu
-GET /api/streams/{streamId}/runtime
-
-# Reset timer stream
-POST /api/streams/{streamId}/reset-runtime
-
-# Status semua stream aktif
-GET /api/streams/active/status
+# Stop current service
+# Apply code changes
+# Restart service
 ```
 
-## Konfigurasi dan Tuning
-
-### 1. Retry Settings
-```javascript
-const MAX_RETRY_ATTEMPTS = 3; // Maksimal restart attempts
-const RESTART_DELAY = 3000; // Delay sebelum restart (3 detik)
+### 2. Force Stop Current Streams (if needed)
+Jika masih ada stream yang tidak bisa dihentikan:
+```bash
+node force-stop-streams.js
 ```
 
-### 2. Process Termination
-```javascript
-const GRACEFUL_TERMINATION_TIMEOUT = 5000; // 5 detik untuk graceful termination
-```
+### 3. Monitor Logs
+Perhatikan log untuk memastikan:
+- Stream berhenti dengan benar
+- Tidak ada duplicate stop attempts
+- Status stream sinkron antara memory dan database
 
-### 3. Monitoring Intervals
-```javascript
-// Update status setiap 30 detik
-setInterval(() => {
-  this.updateActiveStreamsStatus();
-}, 30000);
+## Prevention Measures
 
-// Sync stream statuses setiap 5 menit
-setInterval(syncStreamStatuses, 5 * 60 * 1000);
-```
+1. **Regular Cleanup**: Zombie process cleanup setiap 2 menit
+2. **Status Sync**: Stream status sync setiap 5 menit
+3. **Process Monitoring**: Event listeners untuk process exit
+4. **Duplicate Prevention**: Flags untuk mencegah multiple stop attempts
 
 ## Testing
 
-### 1. Test Crash Recovery
-- Simulasi ffmpeg crash dengan SIGSEGV
-- Verifikasi restart dengan remaining duration
-- Cek tidak ada duplikasi process
+Setelah menerapkan perbaikan, test dengan:
+1. Start stream dengan durasi pendek (1-2 menit)
+2. Monitor apakah stream berhenti otomatis
+3. Check logs untuk memastikan tidak ada duplicate attempts
+4. Verify database status consistency
 
-### 2. Test Duration Limits
-- Stream dengan durasi 10 menit
-- Simulasi crash setelah 5 menit
-- Verifikasi restart dengan 5 menit remaining
-- Verifikasi stop otomatis setelah total 10 menit
+## Notes
 
-### 3. Test Process Management
-- Start multiple streams
-- Simulasi crash dan restart
-- Verifikasi tidak ada zombie processes
-
-## Troubleshooting
-
-### 1. Stream Tidak Restart
-- Cek logs untuk error messages
-- Verifikasi stream masih ada di database
-- Cek apakah sudah melebihi total durasi
-
-### 2. Duplikasi Process
-- Gunakan `GET /api/streams/active/status` untuk cek
-- Reset runtime jika diperlukan
-- Restart aplikasi jika masalah persist
-
-### 3. Timer Tidak Akurat
-- Cek runtime info dengan API
-- Reset timer jika diperlukan
-- Verifikasi durasi di database
-
-## Kesimpulan
-
-Perbaikan ini mengatasi masalah utama:
-1. **Duplikasi Process** - Dengan process management yang lebih baik
-2. **Timer Reset** - Dengan runtime tracking kumulatif
-3. **Stream Tidak Berhenti** - Dengan durasi monitoring yang akurat
-
-Sistem sekarang lebih robust dan dapat menangani crash ffmpeg dengan lebih baik, sambil mempertahankan durasi stream yang akurat.
+- Perbaikan ini mengatasi masalah utama yang menyebabkan stream tidak bisa dihentikan
+- Process killing sekarang lebih robust dengan timeout dan fallback
+- Memory cleanup lebih comprehensive
+- Status synchronization lebih reliable

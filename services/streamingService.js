@@ -196,6 +196,36 @@ async function startStream(streamId) {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
+    // Add process exit event listener for proper cleanup
+    ffmpegProcess.on('exit', (code, signal) => {
+      console.log(`[StreamingService] FFmpeg process for stream ${streamId} exited with code ${code}, signal ${signal}`);
+      
+      // Only cleanup if this is still the current process for this stream
+      if (activeStreams.get(streamId) === ffmpegProcess) {
+        activeStreams.delete(streamId);
+        streamStartTimes.delete(streamId);
+        streamTotalRuntime.delete(streamId);
+        streamRetryCount.delete(streamId);
+        streamLogs.delete(streamId);
+        manuallyStoppingStreams.delete(streamId);
+        
+        // Update database status if process exited unexpectedly
+        if (code !== 0 && !manuallyStoppingStreams.has(streamId)) {
+          Stream.updateStatus(streamId, 'offline', stream.user_id).then(() => {
+            console.log(`[StreamingService] Updated stream ${streamId} status to offline due to unexpected exit`);
+          }).catch(err => {
+            console.error(`[StreamingService] Error updating stream status: ${err.message}`);
+          });
+        }
+      }
+    });
+
+    // Add error event listener
+    ffmpegProcess.on('error', (error) => {
+      console.error(`[StreamingService] FFmpeg process error for stream ${streamId}:`, error);
+      addStreamLog(streamId, `FFmpeg error: ${error.message}`);
+    });
+
     // Track start time for this session
     streamStartTimes.set(streamId, now.getTime());
     activeStreams.set(streamId, ffmpegProcess);
@@ -383,40 +413,83 @@ async function startStream(streamId) {
 }
 async function stopStream(streamId) {
   try {
-    const ffmpegProcess = activeStreams.get(streamId);
-    const isActive = ffmpegProcess !== undefined;
-    console.log(`[StreamingService] Stop request for stream ${streamId}, isActive: ${isActive}`);
-    if (!isActive) {
-      const stream = await Stream.findById(streamId);
-      if (stream && stream.status === 'live') {
-        console.log(`[StreamingService] Stream ${streamId} not active in memory but status is 'live' in DB. Fixing status.`);
-        await Stream.updateStatus(streamId, 'offline', stream.user_id);
-        if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-          schedulerService.handleStreamStopped(streamId);
-        }
-        return { success: true, message: 'Stream status fixed (was not active but marked as live)' };
-      }
-      return { success: false, error: 'Stream is not active' };
+    if (!activeStreams.has(streamId)) {
+      console.log(`[StreamingService] Stream ${streamId} is not active`);
+      return { success: true, message: 'Stream is not active' };
     }
+
+    const ffmpegProcess = activeStreams.get(streamId);
+    if (!ffmpegProcess) {
+      console.log(`[StreamingService] No FFmpeg process found for stream ${streamId}`);
+      activeStreams.delete(streamId);
+      return { success: true, message: 'No process to stop' };
+    }
+
     addStreamLog(streamId, 'Stopping stream...');
-    console.log(`[StreamingService] Stopping active stream ${streamId}`);
+    console.log(`[StreamingService] Stop request for stream ${streamId}, isActive: ${isStreamActive(streamId)}`);
+    
     manuallyStoppingStreams.add(streamId);
+    
+    // First try graceful termination
     try {
       ffmpegProcess.kill('SIGTERM');
+      addStreamLog(streamId, 'Sent SIGTERM to FFmpeg process');
     } catch (killError) {
-      console.error(`[StreamingService] Error killing FFmpeg process: ${killError.message}`);
-      manuallyStoppingStreams.delete(streamId);
+      console.error(`[StreamingService] Error sending SIGTERM: ${killError.message}`);
     }
-    const stream = await Stream.findById(streamId);
+
+    // Wait for graceful termination with timeout
+    let processStopped = false;
+    const maxWaitTime = 10000; // 10 seconds
+    const checkInterval = 100; // Check every 100ms
+    const startTime = Date.now();
+    
+    while (!processStopped && (Date.now() - startTime) < maxWaitTime) {
+      if (!isProcessRunning(ffmpegProcess)) {
+        processStopped = true;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+    
+    // If process is still running, force kill it
+    if (!processStopped && isProcessRunning(ffmpegProcess)) {
+      try {
+        console.log(`[StreamingService] Force killing FFmpeg process for stream ${streamId}`);
+        ffmpegProcess.kill('SIGKILL');
+        addStreamLog(streamId, 'Force killed FFmpeg process with SIGKILL');
+        
+        // Wait a bit more for SIGKILL to take effect
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (forceKillError) {
+        console.error(`[StreamingService] Error force killing process: ${forceKillError.message}`);
+      }
+    }
+    
+    // Clean up stream data
     activeStreams.delete(streamId);
+    streamStartTimes.delete(streamId);
+    streamTotalRuntime.delete(streamId);
+    streamRetryCount.delete(streamId);
+    streamLogs.delete(streamId);
+    
+    // Update database status
+    const stream = await Stream.findById(streamId);
     if (stream) {
       await Stream.updateStatus(streamId, 'offline', stream.user_id);
       const updatedStream = await Stream.findById(streamId);
       await saveStreamHistory(updatedStream);
+      addStreamLog(streamId, 'Stream status updated to offline in database');
     }
-    if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+    
+    manuallyStoppingStreams.delete(streamId);
+    
+    // Notify scheduler
+    if (typeof schedulerService !== 'undefined' && schedulerService.handleStreamStopped) {
       schedulerService.handleStreamStopped(streamId);
     }
+    
+    console.log(`[StreamingService] Successfully stopped stream ${streamId}`);
     return { success: true, message: 'Stream stopped successfully' };
   } catch (error) {
     manuallyStoppingStreams.delete(streamId);
@@ -427,38 +500,90 @@ async function stopStream(streamId) {
 async function syncStreamStatuses() {
   try {
     console.log('[StreamingService] Syncing stream statuses...');
+    
+    // Check streams marked as 'live' in DB but not active in memory
     const liveStreams = await Stream.findAll(null, 'live');
     for (const stream of liveStreams) {
       const isReallyActive = activeStreams.has(stream.id);
       if (!isReallyActive) {
         console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
-        await Stream.updateStatus(stream.id, 'offline');
+        
+        // Check if this stream is currently being stopped
+        if (manuallyStoppingStreams.has(stream.id)) {
+          console.log(`[StreamingService] Stream ${stream.id} is currently being stopped, skipping status update`);
+          continue;
+        }
+        
+        // Update status to offline
+        await Stream.updateStatus(stream.id, 'offline', stream.user_id);
         console.log(`[StreamingService] Updated stream ${stream.id} status to 'offline'`);
+        
+        // Clean up any orphaned data
+        streamStartTimes.delete(stream.id);
+        streamTotalRuntime.delete(stream.id);
+        streamRetryCount.delete(stream.id);
+        streamLogs.delete(stream.id);
       }
     }
+    
+    // Check streams active in memory but not 'live' in DB
     const activeStreamIds = Array.from(activeStreams.keys());
     for (const streamId of activeStreamIds) {
       const stream = await Stream.findById(streamId);
       if (!stream || stream.status !== 'live') {
         console.log(`[StreamingService] Found inconsistent stream ${streamId}: active in memory but not 'live' in DB`);
+        
         if (stream) {
-          await Stream.updateStatus(streamId, 'live');
+          // Update DB status to match memory
+          await Stream.updateStatus(streamId, 'live', stream.user_id);
           console.log(`[StreamingService] Updated stream ${streamId} status to 'live'`);
         } else {
+          // Stream not found in DB, clean up memory
           console.log(`[StreamingService] Stream ${streamId} not found in DB, removing from active streams`);
           const process = activeStreams.get(streamId);
           if (process) {
             try {
-              process.kill('SIGTERM');
+              if (isProcessRunning(process)) {
+                process.kill('SIGTERM');
+                console.log(`[StreamingService] Sent SIGTERM to orphaned process for stream ${streamId}`);
+                
+                // Wait a bit then force kill if still running
+                setTimeout(() => {
+                  if (isProcessRunning(process)) {
+                    try {
+                      process.kill('SIGKILL');
+                      console.log(`[StreamingService] Force killed orphaned process for stream ${streamId}`);
+                    } catch (error) {
+                      console.error(`[StreamingService] Error force killing orphaned process: ${error.message}`);
+                    }
+                  }
+                }, 5000);
+              }
             } catch (error) {
               console.error(`[StreamingService] Error killing orphaned process: ${error.message}`);
             }
           }
+          
+          // Clean up all data
           activeStreams.delete(streamId);
+          streamStartTimes.delete(streamId);
+          streamTotalRuntime.delete(streamId);
+          streamRetryCount.delete(streamId);
+          streamLogs.delete(streamId);
+          manuallyStoppingStreams.delete(streamId);
         }
       }
     }
-    console.log(`[StreamingService] Stream status sync completed. Active streams: ${activeStreamIds.length}`);
+    
+    // Clean up any streams that are stuck in manuallyStoppingStreams
+    for (const streamId of manuallyStoppingStreams) {
+      if (!activeStreams.has(streamId)) {
+        console.log(`[StreamingService] Cleaning up stuck stopping flag for stream ${streamId}`);
+        manuallyStoppingStreams.delete(streamId);
+      }
+    }
+    
+    console.log(`[StreamingService] Stream status sync completed. Active streams: ${activeStreamIds.length}, Stopping: ${manuallyStoppingStreams.size}`);
   } catch (error) {
     console.error('[StreamingService] Error syncing stream statuses:', error);
   }
@@ -573,6 +698,44 @@ async function saveStreamHistory(stream) {
   }
 }
 
+// Function to check for and clean up zombie processes
+async function cleanupZombieProcesses() {
+  try {
+    console.log('[StreamingService] Checking for zombie processes...');
+    const activeStreamIds = Array.from(activeStreams.keys());
+    
+    for (const streamId of activeStreamIds) {
+      const process = activeStreams.get(streamId);
+      if (process && !isProcessRunning(process)) {
+        console.log(`[StreamingService] Found zombie process for stream ${streamId}, cleaning up...`);
+        
+        // Clean up memory
+        activeStreams.delete(streamId);
+        streamStartTimes.delete(streamId);
+        streamTotalRuntime.delete(streamId);
+        streamRetryCount.delete(streamId);
+        streamLogs.delete(streamId);
+        manuallyStoppingStreams.delete(streamId);
+        
+        // Update database status
+        try {
+          await Stream.updateStatus(streamId, 'offline');
+          console.log(`[StreamingService] Updated zombie stream ${streamId} status to offline`);
+        } catch (error) {
+          console.error(`[StreamingService] Error updating zombie stream status: ${error.message}`);
+        }
+      }
+    }
+    
+    console.log(`[StreamingService] Zombie process cleanup completed. Active streams: ${activeStreams.size}`);
+  } catch (error) {
+    console.error('[StreamingService] Error during zombie process cleanup:', error);
+  }
+}
+
+// Run zombie cleanup every 2 minutes
+setInterval(cleanupZombieProcesses, 2 * 60 * 1000);
+
 module.exports = {
   startStream,
   stopStream,
@@ -582,6 +745,7 @@ module.exports = {
   syncStreamStatuses,
   saveStreamHistory,
   getStreamRuntimeInfo,
-  resetStreamRuntime
+  resetStreamRuntime,
+  cleanupZombieProcesses
 };
 schedulerService.init(module.exports);
