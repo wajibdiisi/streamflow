@@ -155,7 +155,7 @@ async function startStream(streamId) {
     if (startingStreams.has(streamId)) {
       console.warn(`[StreamingService] Start already in progress for ${streamId}, skipping duplicate start`);
       addStreamLog(streamId, 'Start already in progress, ignored duplicate start request');
-      return { success: false, error: 'Start already in progress' };
+      return { success: true, message: 'Start already in progress' };
     }
     startingStreams.add(streamId);
     
@@ -762,4 +762,3 @@ module.exports = {
   resetStreamRuntime,
   cleanupZombieProcesses
 };
-schedulerService.init(module.exports);
