@@ -208,10 +208,21 @@ async function startStream(streamId) {
 
     // Note: exit/error handlers are registered later with richer logic
 
-    // Track start time for this session
+    // Track start time for this session and register as active
     streamStartTimes.set(streamId, now.getTime());
     activeStreams.set(streamId, ffmpegProcess);
-    
+
+    // Verify process actually stays running briefly before marking DB as live
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!isProcessRunning(ffmpegProcess)) {
+      addStreamLog(streamId, 'FFmpeg exited immediately after start; not marking as live');
+      // Clean up maps
+      activeStreams.delete(streamId);
+      streamStartTimes.delete(streamId);
+      // Return failure so scheduler/UI can handle it
+      return { success: false, error: 'FFmpeg failed to start' };
+    }
+
     await Stream.updateStatus(streamId, 'live', stream.user_id);
     ffmpegProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
@@ -492,11 +503,18 @@ async function syncStreamStatuses() {
     for (const stream of liveStreams) {
       const isReallyActive = activeStreams.has(stream.id);
       if (!isReallyActive) {
-        // Grace period: if stream was just marked live in the last 60s, skip once
+        // Grace period and protective checks to avoid premature offline flips
         const updatedAt = stream.status_updated_at ? new Date(stream.status_updated_at).getTime() : 0;
-        const justWentLive = updatedAt && (Date.now() - updatedAt) < 60_000;
-        if (justWentLive) {
-          console.log(`[StreamingService] Skipping status correction for ${stream.id}: within 60s grace after going live`);
+        const justWentLive = updatedAt && (Date.now() - updatedAt) < (5 * 60_000); // 5 minutes
+        const isStartingNow = startingStreams.has(stream.id);
+        const scheduledMap = (typeof schedulerService !== 'undefined' && schedulerService.getScheduledTerminations)
+          ? schedulerService.getScheduledTerminations() : {};
+        const hasScheduledTermination = !!scheduledMap[stream.id];
+        if (justWentLive || isStartingNow || hasScheduledTermination) {
+          console.log(`[StreamingService] Skipping status correction for ${stream.id}: ` +
+            `${justWentLive ? 'within grace window; ' : ''}` +
+            `${isStartingNow ? 'start in progress; ' : ''}` +
+            `${hasScheduledTermination ? 'termination scheduled' : ''}`);
           continue;
         }
         console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
