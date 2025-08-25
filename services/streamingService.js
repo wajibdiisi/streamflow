@@ -206,35 +206,7 @@ async function startStream(streamId) {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    // Add process exit event listener for proper cleanup
-    ffmpegProcess.on('exit', (code, signal) => {
-      console.log(`[StreamingService] FFmpeg process for stream ${streamId} exited with code ${code}, signal ${signal}`);
-      
-      // Only cleanup if this is still the current process for this stream
-      if (activeStreams.get(streamId) === ffmpegProcess) {
-        activeStreams.delete(streamId);
-        streamStartTimes.delete(streamId);
-        streamTotalRuntime.delete(streamId);
-        streamRetryCount.delete(streamId);
-        streamLogs.delete(streamId);
-        manuallyStoppingStreams.delete(streamId);
-        
-        // Update database status if process exited unexpectedly
-        if (code !== 0 && !manuallyStoppingStreams.has(streamId)) {
-          Stream.updateStatus(streamId, 'offline', stream.user_id).then(() => {
-            console.log(`[StreamingService] Updated stream ${streamId} status to offline due to unexpected exit`);
-          }).catch(err => {
-            console.error(`[StreamingService] Error updating stream status: ${err.message}`);
-          });
-        }
-      }
-    });
-
-    // Add error event listener
-    ffmpegProcess.on('error', (error) => {
-      console.error(`[StreamingService] FFmpeg process error for stream ${streamId}:`, error);
-      addStreamLog(streamId, `FFmpeg error: ${error.message}`);
-    });
+    // Note: exit/error handlers are registered later with richer logic
 
     // Track start time for this session
     streamStartTimes.set(streamId, now.getTime());
@@ -520,6 +492,13 @@ async function syncStreamStatuses() {
     for (const stream of liveStreams) {
       const isReallyActive = activeStreams.has(stream.id);
       if (!isReallyActive) {
+        // Grace period: if stream was just marked live in the last 60s, skip once
+        const updatedAt = stream.status_updated_at ? new Date(stream.status_updated_at).getTime() : 0;
+        const justWentLive = updatedAt && (Date.now() - updatedAt) < 60_000;
+        if (justWentLive) {
+          console.log(`[StreamingService] Skipping status correction for ${stream.id}: within 60s grace after going live`);
+          continue;
+        }
         console.log(`[StreamingService] Found inconsistent stream ${stream.id}: marked as 'live' in DB but not active in memory`);
         
         // Check if this stream is currently being stopped
