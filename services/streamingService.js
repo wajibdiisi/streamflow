@@ -23,6 +23,8 @@ const streamTotalRuntime = new Map(); // Track total runtime across restarts
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 100;
+// Guard to prevent concurrent startStream invocations for the same stream
+const startingStreams = new Set();
 function addStreamLog(streamId, message) {
   if (!streamLogs.has(streamId)) {
     streamLogs.set(streamId, []);
@@ -149,6 +151,14 @@ async function buildFFmpegArgs(stream) {
 }
 async function startStream(streamId) {
   try {
+    // Fast-fail if a start for this stream is already in progress
+    if (startingStreams.has(streamId)) {
+      console.warn(`[StreamingService] Start already in progress for ${streamId}, skipping duplicate start`);
+      addStreamLog(streamId, 'Start already in progress, ignored duplicate start request');
+      return { success: false, error: 'Start already in progress' };
+    }
+    startingStreams.add(streamId);
+    
     // Check if stream is already active and kill any existing process
     if (activeStreams.has(streamId)) {
       const existingProcess = activeStreams.get(streamId);
@@ -409,6 +419,10 @@ async function startStream(streamId) {
     addStreamLog(streamId, `Failed to start stream: ${error.message}`);
     console.error(`Error starting stream ${streamId}:`, error);
     return { success: false, error: error.message };
+  }
+  finally {
+    // Ensure we always clear the starting flag
+    startingStreams.delete(streamId);
   }
 }
 async function stopStream(streamId) {
