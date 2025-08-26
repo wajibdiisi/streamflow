@@ -515,6 +515,20 @@ async function syncStreamStatuses() {
     for (const stream of liveStreams) {
       const isReallyActive = activeStreams.has(stream.id);
       if (!isReallyActive) {
+        // If this stream has a future (or just-started) schedule_time, it should not be forced offline.
+        // This handles cases where a scheduled stream was accidentally marked 'live' prematurely.
+        const nowTs = Date.now();
+        const scheduleTs = stream.schedule_time ? new Date(stream.schedule_time).getTime() : null;
+        const isInFuture = scheduleTs && nowTs < scheduleTs;
+        if (isInFuture) {
+          try {
+            console.log(`[StreamingService] Reverting stream ${stream.id} status to 'scheduled' due to future schedule_time`);
+            await Stream.updateStatus(stream.id, 'scheduled', stream.user_id);
+          } catch (e) {
+            console.warn(`[StreamingService] Failed reverting ${stream.id} to 'scheduled': ${e.message}`);
+          }
+          continue;
+        }
         // Grace period and protective checks to avoid premature offline flips
         const updatedAt = stream.status_updated_at ? new Date(stream.status_updated_at).getTime() : 0;
         const justWentLive = updatedAt && (Date.now() - updatedAt) < (5 * 60_000); // 5 minutes
