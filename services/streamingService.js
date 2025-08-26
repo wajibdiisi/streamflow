@@ -224,6 +224,12 @@ async function startStream(streamId) {
     }
 
     await Stream.updateStatus(streamId, 'live', stream.user_id);
+    // Once live, clear any previous schedule_time to avoid re-scheduling confusion
+    try {
+      await Stream.update(streamId, { schedule_time: null });
+    } catch (e) {
+      console.warn(`[StreamingService] Failed clearing schedule_time for ${streamId}: ${e.message}`);
+    }
     ffmpegProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
@@ -297,7 +303,10 @@ async function startStream(streamId) {
 
       if (signal === 'SIGSEGV') {
         const retryCount = streamRetryCount.get(streamId) || 0;
-        if (retryCount < MAX_RETRY_ATTEMPTS) {
+        // Disable crash restarts if the stream has already been running > 10 minutes to avoid restarting from beginning unexpectedly
+        const runtimeInfo = getStreamRuntimeInfo(streamId);
+        const allowRestart = runtimeInfo.totalRuntimeMinutes < 10;
+        if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
           streamRetryCount.set(streamId, retryCount + 1);
           console.log(`[StreamingService] FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1} for stream ${streamId}`);
           addStreamLog(streamId, `FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1}`);
@@ -335,7 +344,10 @@ async function startStream(streamId) {
           addStreamLog(streamId, errorMessage);
           console.error(`[StreamingService] ${errorMessage} for stream ${streamId}`);
           const retryCount = streamRetryCount.get(streamId) || 0;
-          if (retryCount < MAX_RETRY_ATTEMPTS) {
+          // Similarly, only auto-restart if short runtime (<10m)
+          const runtimeInfo = getStreamRuntimeInfo(streamId);
+          const allowRestart = runtimeInfo.totalRuntimeMinutes < 10;
+          if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
             streamRetryCount.set(streamId, retryCount + 1);
             console.log(`[StreamingService] FFmpeg exited with code ${code}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
             setTimeout(async () => {
