@@ -323,9 +323,10 @@ async function startStream(streamId) {
         }
         
         const retryCount = streamRetryCount.get(streamId) || 0;
-        // Disable crash restarts if the stream has already been running > 10 minutes to avoid restarting from beginning unexpectedly
+        // Allow restart for longer runtime for SIGSEGV (crash) as it's usually a system issue
         const runtimeInfo = getStreamRuntimeInfo(streamId);
-        const allowRestart = runtimeInfo.totalRuntimeMinutes < 10;
+        const allowRestart = runtimeInfo.totalRuntimeMinutes < 30; // Increased from 10 to 30 minutes for crashes
+        
         if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
           streamRetryCount.set(streamId, retryCount + 1);
           console.log(`[StreamingService] FFmpeg crashed with SIGSEGV. Attempting restart #${retryCount + 1} for stream ${streamId}`);
@@ -352,9 +353,12 @@ async function startStream(streamId) {
             }
           }, 3000);
           return;
-        } else {
+        } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
           console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
           addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
+        } else {
+          console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting due to SIGSEGV`);
+          addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting due to SIGSEGV`);
         }
       }
       else {
@@ -384,29 +388,46 @@ async function startStream(streamId) {
             }
           }
           
-          const retryCount = streamRetryCount.get(streamId) || 0;
-          // Similarly, only auto-restart if short runtime (<10m)
-          const runtimeInfo = getStreamRuntimeInfo(streamId);
-          const allowRestart = runtimeInfo.totalRuntimeMinutes < 10;
-          if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
-            streamRetryCount.set(streamId, retryCount + 1);
-            console.log(`[StreamingService] FFmpeg exited with code ${code}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
-            setTimeout(async () => {
-              try {
-                const streamInfo = await Stream.findById(streamId);
-                if (streamInfo) {
-                  const result = await startStream(streamId);
-                  if (!result.success) {
-                    console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
-                    await Stream.updateStatus(streamId, 'offline');
+          // Only restart for certain error codes that are likely recoverable
+          // Error code 1 often means "End of file" which can be temporary
+          const isRecoverableError = code === 1 || code === 255; // Common recoverable errors
+          
+          if (isRecoverableError) {
+            const retryCount = streamRetryCount.get(streamId) || 0;
+            // Allow restart for longer runtime if it's a recoverable error
+            const runtimeInfo = getStreamRuntimeInfo(streamId);
+            const allowRestart = runtimeInfo.totalRuntimeMinutes < 60; // Increased from 10 to 60 minutes
+            
+            if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
+              streamRetryCount.set(streamId, retryCount + 1);
+              console.log(`[StreamingService] FFmpeg exited with recoverable error code ${code}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
+              addStreamLog(streamId, `FFmpeg exited with recoverable error code ${code}. Attempting restart #${retryCount + 1}`);
+              setTimeout(async () => {
+                try {
+                  const streamInfo = await Stream.findById(streamId);
+                  if (streamInfo) {
+                    const result = await startStream(streamId);
+                    if (!result.success) {
+                      console.error(`[StreamingService] Failed to restart stream: ${result.error}`);
+                      await Stream.updateStatus(streamId, 'offline');
+                    }
                   }
+                } catch (error) {
+                  console.error(`[StreamingService] Error during stream restart: ${error.message}`);
+                  await Stream.updateStatus(streamId, 'offline');
                 }
-              } catch (error) {
-                console.error(`[StreamingService] Error during stream restart: ${error.message}`);
-                await Stream.updateStatus(streamId, 'offline');
-              }
-            }, 3000);
-            return;
+              }, 3000);
+              return;
+            } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
+              console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
+              addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
+            } else {
+              console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
+              addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
+            }
+          } else {
+            console.log(`[StreamingService] Stream ${streamId} exited with non-recoverable error code ${code}, not restarting`);
+            addStreamLog(streamId, `Stream exited with non-recoverable error code ${code}, not restarting`);
           }
         }
         if (wasActive) {

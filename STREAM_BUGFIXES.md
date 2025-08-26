@@ -2,7 +2,7 @@
 
 ## Issues Fixed
 
-### 4. Stream Restart After Duration Exceeded
+### 4. Stream Restart After Duration Exceeded (REVISED)
 **Problem**: Stream yang sudah mencapai durasi maksimum dan berhasil dihentikan oleh scheduler malah restart lagi karena FFmpeg exit dengan error code non-zero (seperti code 255). Ini menyebabkan stream yang seharusnya sudah selesai malah berjalan lagi.
 
 **Root Cause**: 
@@ -15,10 +15,10 @@ Pada fungsi `handleStreamExit` di `streamingService.js`, pengecekan durasi maksi
 5. Stream restart dan berjalan lagi
 
 **Solution**:
-Menambahkan pengecekan durasi maksimum pada semua kondisi restart:
+Menambahkan pengecekan durasi maksimum pada semua kondisi restart dengan pendekatan yang lebih seimbang:
 
-1. **SIGSEGV handling**: Tambah pengecekan durasi sebelum restart
-2. **Error code handling**: Tambah pengecekan durasi sebelum restart
+1. **SIGSEGV handling**: Tambah pengecekan durasi sebelum restart, allow restart sampai 30 menit runtime
+2. **Error code handling**: Tambah pengecekan durasi sebelum restart, hanya restart untuk error code yang recoverable (1, 255) sampai 60 menit runtime
 
 **Code Changes**:
 ```javascript
@@ -35,35 +35,44 @@ if (signal === 'SIGSEGV') {
       return;
     }
   }
+  
+  // Allow restart for longer runtime for SIGSEGV (crash) as it's usually a system issue
+  const allowRestart = runtimeInfo.totalRuntimeMinutes < 30; // Increased from 10 to 30 minutes for crashes
   // ... existing restart logic
 }
 
 // Pada bagian error code handling
 else {
   if (code !== 0 && code !== null) {
-    // Check again if stream has exceeded total duration before attempting restart
-    const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
-    const currentStream = await Stream.findById(streamId);
-    if (currentStream && currentStream.duration) {
-      const maxDurationMs = currentStream.duration * 60 * 1000;
-      if (currentTotalRuntime >= maxDurationMs) {
-        console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to error code ${code}`);
-        // ... handle offline status
-        return;
-      }
+    // Only restart for certain error codes that are likely recoverable
+    // Error code 1 often means "End of file" which can be temporary
+    const isRecoverableError = code === 1 || code === 255; // Common recoverable errors
+    
+    if (isRecoverableError) {
+      // Allow restart for longer runtime if it's a recoverable error
+      const allowRestart = runtimeInfo.totalRuntimeMinutes < 60; // Increased from 10 to 60 minutes
+      // ... existing restart logic
+    } else {
+      console.log(`[StreamingService] Stream ${streamId} exited with non-recoverable error code ${code}, not restarting`);
     }
-    // ... existing restart logic
   }
 }
 ```
 
 **Testing**:
 - Stream yang mencapai durasi maksimum tidak akan restart meskipun FFmpeg exit dengan error
-- Stream yang crash sebelum mencapai durasi maksimum masih bisa restart (sesuai logic yang ada)
+- Stream yang crash sebelum mencapai durasi maksimum masih bisa restart (sampai 30 menit runtime)
+- Stream dengan error code recoverable (1, 255) bisa restart sampai 60 menit runtime
+- Stream dengan error code non-recoverable tidak akan restart
 - Log akan menunjukkan alasan yang jelas mengapa stream tidak restart
 
 **Files Modified**:
 - `services/streamingService.js`
+
+**Revision Notes**:
+- Versi awal terlalu agresif dan menyebabkan stream berhenti tiba-tiba
+- Versi revisi lebih seimbang dengan membedakan error code recoverable vs non-recoverable
+- Meningkatkan batas runtime untuk restart dari 10 menit menjadi 30-60 menit tergantung jenis error
 
 ---
 
