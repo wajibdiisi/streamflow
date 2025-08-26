@@ -1,6 +1,71 @@
-# Stream Bug Fixes - August 24, 2025
+# Stream Bug Fixes - August 26, 2025
 
 ## Issues Fixed
+
+### 4. Stream Restart After Duration Exceeded
+**Problem**: Stream yang sudah mencapai durasi maksimum dan berhasil dihentikan oleh scheduler malah restart lagi karena FFmpeg exit dengan error code non-zero (seperti code 255). Ini menyebabkan stream yang seharusnya sudah selesai malah berjalan lagi.
+
+**Root Cause**: 
+Pada fungsi `handleStreamExit` di `streamingService.js`, pengecekan durasi maksimum hanya dilakukan di awal fungsi, tapi tidak dilakukan lagi ketika menangani error code non-zero atau SIGSEGV. Akibatnya:
+
+1. Stream berhasil dihentikan oleh scheduler setelah mencapai durasi maksimum
+2. Stream history disimpan dengan durasi yang benar
+3. Tapi kemudian FFmpeg exit dengan error code (misal 255)
+4. Sistem menganggap ini sebagai error dan mencoba restart tanpa mengecek durasi lagi
+5. Stream restart dan berjalan lagi
+
+**Solution**:
+Menambahkan pengecekan durasi maksimum pada semua kondisi restart:
+
+1. **SIGSEGV handling**: Tambah pengecekan durasi sebelum restart
+2. **Error code handling**: Tambah pengecekan durasi sebelum restart
+
+**Code Changes**:
+```javascript
+// Pada bagian SIGSEGV handling
+if (signal === 'SIGSEGV') {
+  // Check if stream has exceeded total duration before attempting restart
+  const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+  const currentStream = await Stream.findById(streamId);
+  if (currentStream && currentStream.duration) {
+    const maxDurationMs = currentStream.duration * 60 * 1000;
+    if (currentTotalRuntime >= maxDurationMs) {
+      console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to SIGSEGV`);
+      // ... handle offline status
+      return;
+    }
+  }
+  // ... existing restart logic
+}
+
+// Pada bagian error code handling
+else {
+  if (code !== 0 && code !== null) {
+    // Check again if stream has exceeded total duration before attempting restart
+    const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+    const currentStream = await Stream.findById(streamId);
+    if (currentStream && currentStream.duration) {
+      const maxDurationMs = currentStream.duration * 60 * 1000;
+      if (currentTotalRuntime >= maxDurationMs) {
+        console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to error code ${code}`);
+        // ... handle offline status
+        return;
+      }
+    }
+    // ... existing restart logic
+  }
+}
+```
+
+**Testing**:
+- Stream yang mencapai durasi maksimum tidak akan restart meskipun FFmpeg exit dengan error
+- Stream yang crash sebelum mencapai durasi maksimum masih bisa restart (sesuai logic yang ada)
+- Log akan menunjukkan alasan yang jelas mengapa stream tidak restart
+
+**Files Modified**:
+- `services/streamingService.js`
+
+---
 
 ### 1. Stream Cannot Be Stopped (Duration Exceeded)
 **Problem**: Stream yang sudah melebihi durasi maksimum tidak bisa dihentikan, menyebabkan program mencoba menghentikan stream yang sama berkali-kali.

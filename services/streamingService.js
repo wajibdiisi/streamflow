@@ -302,6 +302,26 @@ async function startStream(streamId) {
       }
 
       if (signal === 'SIGSEGV') {
+        // Check if stream has exceeded total duration before attempting restart
+        const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+        const currentStream = await Stream.findById(streamId);
+        if (currentStream && currentStream.duration) {
+          const maxDurationMs = currentStream.duration * 60 * 1000;
+          if (currentTotalRuntime >= maxDurationMs) {
+            console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to SIGSEGV`);
+            addStreamLog(streamId, `Stream exceeded total duration, not restarting due to SIGSEGV`);
+            try {
+              await Stream.updateStatus(streamId, 'offline');
+              if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+                schedulerService.handleStreamStopped(streamId);
+              }
+            } catch (error) {
+              console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+            }
+            return;
+          }
+        }
+        
         const retryCount = streamRetryCount.get(streamId) || 0;
         // Disable crash restarts if the stream has already been running > 10 minutes to avoid restarting from beginning unexpectedly
         const runtimeInfo = getStreamRuntimeInfo(streamId);
@@ -343,6 +363,27 @@ async function startStream(streamId) {
           errorMessage = `FFmpeg process exited with error code ${code}`;
           addStreamLog(streamId, errorMessage);
           console.error(`[StreamingService] ${errorMessage} for stream ${streamId}`);
+          
+          // Check again if stream has exceeded total duration before attempting restart
+          const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+          const currentStream = await Stream.findById(streamId);
+          if (currentStream && currentStream.duration) {
+            const maxDurationMs = currentStream.duration * 60 * 1000;
+            if (currentTotalRuntime >= maxDurationMs) {
+              console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to error code ${code}`);
+              addStreamLog(streamId, `Stream exceeded total duration, not restarting due to error code ${code}`);
+              try {
+                await Stream.updateStatus(streamId, 'offline');
+                if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+                  schedulerService.handleStreamStopped(streamId);
+                }
+              } catch (error) {
+                console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+              }
+              return;
+            }
+          }
+          
           const retryCount = streamRetryCount.get(streamId) || 0;
           // Similarly, only auto-restart if short runtime (<10m)
           const runtimeInfo = getStreamRuntimeInfo(streamId);
