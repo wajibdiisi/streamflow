@@ -301,6 +301,14 @@ async function startStream(streamId) {
         }
       }
 
+      // Additional check: if stream status is already 'offline' in database, don't restart
+      const currentStreamStatus = await Stream.findById(streamId);
+      if (currentStreamStatus && currentStreamStatus.status === 'offline') {
+        console.log(`[StreamingService] Stream ${streamId} status is already 'offline' in database, not restarting`);
+        addStreamLog(streamId, `Stream status is already 'offline' in database, not restarting`);
+        return;
+      }
+
       if (signal === 'SIGSEGV') {
         // Check if stream has exceeded total duration before attempting restart
         const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
@@ -320,6 +328,13 @@ async function startStream(streamId) {
             }
             return;
           }
+        }
+
+        // Additional check: if stream status is already 'offline' in database, don't restart
+        if (currentStream && currentStream.status === 'offline') {
+          console.log(`[StreamingService] Stream ${streamId} status is already 'offline' in database, not restarting due to SIGSEGV`);
+          addStreamLog(streamId, `Stream status is already 'offline' in database, not restarting due to SIGSEGV`);
+          return;
         }
         
         const retryCount = streamRetryCount.get(streamId) || 0;
@@ -387,10 +402,18 @@ async function startStream(streamId) {
               return;
             }
           }
+
+          // Additional check: if stream status is already 'offline' in database, don't restart
+          if (currentStream && currentStream.status === 'offline') {
+            console.log(`[StreamingService] Stream ${streamId} status is already 'offline' in database, not restarting due to error code ${code}`);
+            addStreamLog(streamId, `Stream status is already 'offline' in database, not restarting due to error code ${code}`);
+            return;
+          }
           
           // Only restart for certain error codes that are likely recoverable
           // Error code 1 often means "End of file" which can be temporary
-          const isRecoverableError = code === 1 || code === 255; // Common recoverable errors
+          // Error code 255 usually means normal termination (like when stopping stream)
+          const isRecoverableError = code === 1; // Only code 1 is truly recoverable
           
           if (isRecoverableError) {
             const retryCount = streamRetryCount.get(streamId) || 0;
@@ -425,6 +448,10 @@ async function startStream(streamId) {
               console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
               addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
             }
+          } else if (code === 255) {
+            // Error code 255 usually means normal termination (like when stopping stream)
+            console.log(`[StreamingService] Stream ${streamId} exited with code 255 (normal termination), not restarting`);
+            addStreamLog(streamId, `Stream exited with code 255 (normal termination), not restarting`);
           } else {
             console.log(`[StreamingService] Stream ${streamId} exited with non-recoverable error code ${code}, not restarting`);
             addStreamLog(streamId, `Stream exited with non-recoverable error code ${code}, not restarting`);
