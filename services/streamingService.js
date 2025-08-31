@@ -20,6 +20,7 @@ const streamLogs = new Map();
 const streamRetryCount = new Map();
 const streamStartTimes = new Map(); // Track actual start time for each stream
 const streamTotalRuntime = new Map(); // Track total runtime across restarts
+const streamErrorMessages = new Map(); // Track error messages for better restart logic
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 100;
@@ -243,6 +244,10 @@ async function startStream(streamId) {
         addStreamLog(streamId, `[FFmpeg] ${message}`);
         if (!message.includes('frame=')) {
           console.error(`[FFMPEG_STDERR] ${streamId}: ${message}`);
+          // Track error messages for better restart logic
+          if (message.includes('Connection reset by peer') || message.includes('av_interleaved_write_frame')) {
+            streamErrorMessages.set(streamId, message);
+          }
         }
       }
     });
@@ -264,6 +269,9 @@ async function startStream(streamId) {
       
       const wasActive = activeStreams.delete(streamId);
       const isManualStop = manuallyStoppingStreams.has(streamId);
+      
+      // Clean up error message tracking
+      streamErrorMessages.delete(streamId);
       
       if (isManualStop) {
         console.log(`[StreamingService] Stream ${streamId} was manually stopped, not restarting`);
@@ -419,12 +427,35 @@ async function startStream(streamId) {
             const retryCount = streamRetryCount.get(streamId) || 0;
             // Allow restart for longer runtime if it's a recoverable error
             const runtimeInfo = getStreamRuntimeInfo(streamId);
-            const allowRestart = runtimeInfo.totalRuntimeMinutes < 60; // Increased from 10 to 60 minutes
+            
+            // Special handling for "Connection reset by peer" errors - allow restart even for longer streams
+            // as this is usually a network issue that can be resolved
+            const trackedError = streamErrorMessages.get(streamId);
+            const isConnectionResetError = trackedError && (
+              trackedError.includes('Connection reset by peer') || 
+              trackedError.includes('av_interleaved_write_frame')
+            );
+            
+            let allowRestart;
+            if (isConnectionResetError) {
+              // For connection reset errors, allow restart up to 8 hours (480 minutes)
+              // This handles network issues that commonly occur with long streams
+              allowRestart = runtimeInfo.totalRuntimeMinutes < 480;
+              console.log(`[StreamingService] Connection reset error detected for stream ${streamId}, allowing restart up to 480 minutes runtime`);
+            } else {
+              // For other error code 1, use standard 60 minute limit
+              allowRestart = runtimeInfo.totalRuntimeMinutes < 60;
+            }
             
             if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
               streamRetryCount.set(streamId, retryCount + 1);
-              console.log(`[StreamingService] FFmpeg exited with recoverable error code ${code}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
-              addStreamLog(streamId, `FFmpeg exited with recoverable error code ${code}. Attempting restart #${retryCount + 1}`);
+              const restartType = isConnectionResetError ? 'connection reset' : `error code ${code}`;
+              console.log(`[StreamingService] FFmpeg exited with recoverable ${restartType}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
+              addStreamLog(streamId, `FFmpeg exited with recoverable ${restartType}. Attempting restart #${retryCount + 1}`);
+              
+              // For connection reset errors, wait longer before restart to allow network to stabilize
+              const restartDelay = isConnectionResetError ? 10000 : 3000; // 10 seconds for connection reset, 3 seconds for others
+              
               setTimeout(async () => {
                 try {
                   const streamInfo = await Stream.findById(streamId);
@@ -439,14 +470,15 @@ async function startStream(streamId) {
                   console.error(`[StreamingService] Error during stream restart: ${error.message}`);
                   await Stream.updateStatus(streamId, 'offline');
                 }
-              }, 3000);
+              }, restartDelay);
               return;
             } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
               console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
               addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
             } else {
-              console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
-              addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for error code ${code}`);
+              const reason = isConnectionResetError ? 'connection reset error' : `error code ${code}`;
+              console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for ${reason}`);
+              addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for ${reason}`);
             }
           } else if (code === 255) {
             // Error code 255 usually means normal termination (like when stopping stream)
@@ -474,6 +506,7 @@ async function startStream(streamId) {
       addStreamLog(streamId, `Error in stream process: ${err.message}`);
       console.error(`[FFMPEG_PROCESS_ERROR] ${streamId}: ${err.message}`);
       activeStreams.delete(streamId);
+      streamErrorMessages.delete(streamId);
       try {
         await Stream.updateStatus(streamId, 'offline');
       } catch (error) {
@@ -570,6 +603,7 @@ async function stopStream(streamId) {
     streamTotalRuntime.delete(streamId);
     streamRetryCount.delete(streamId);
     streamLogs.delete(streamId);
+    streamErrorMessages.delete(streamId);
     
     // Update database status
     const stream = await Stream.findById(streamId);
@@ -649,6 +683,7 @@ async function syncStreamStatuses() {
         streamTotalRuntime.delete(stream.id);
         streamRetryCount.delete(stream.id);
         streamLogs.delete(stream.id);
+        streamErrorMessages.delete(stream.id);
       }
     }
     
@@ -696,6 +731,7 @@ async function syncStreamStatuses() {
           streamTotalRuntime.delete(streamId);
           streamRetryCount.delete(streamId);
           streamLogs.delete(streamId);
+          streamErrorMessages.delete(streamId);
           manuallyStoppingStreams.delete(streamId);
         }
       }
@@ -748,6 +784,7 @@ function resetStreamRuntime(streamId) {
   streamTotalRuntime.delete(streamId);
   streamStartTimes.delete(streamId);
   streamRetryCount.delete(streamId);
+  streamErrorMessages.delete(streamId);
   console.log(`[StreamingService] Reset runtime tracking for stream ${streamId}`);
 }
 
@@ -841,6 +878,7 @@ async function cleanupZombieProcesses() {
         streamTotalRuntime.delete(streamId);
         streamRetryCount.delete(streamId);
         streamLogs.delete(streamId);
+        streamErrorMessages.delete(streamId);
         manuallyStoppingStreams.delete(streamId);
         
         // Update database status
