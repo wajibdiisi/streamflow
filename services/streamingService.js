@@ -172,6 +172,12 @@ async function startStream(streamId) {
     // Reset retry count for new start attempt
     streamRetryCount.set(streamId, 0);
     
+    // Check if we should reset runtime tracking (if stream has been offline for a while)
+    if (await shouldResetRuntime(streamId)) {
+      console.log(`[StreamingService] Stream ${streamId} has been offline for over 1 hour, resetting runtime tracking`);
+      resetStreamRuntime(streamId);
+    }
+    
     const stream = await Stream.findById(streamId);
     if (!stream) {
       return { success: false, error: 'Stream not found' };
@@ -245,7 +251,12 @@ async function startStream(streamId) {
         if (!message.includes('frame=')) {
           console.error(`[FFMPEG_STDERR] ${streamId}: ${message}`);
           // Track error messages for better restart logic
-          if (message.includes('Connection reset by peer') || message.includes('av_interleaved_write_frame')) {
+          if (message.includes('Connection reset by peer') || 
+              message.includes('av_interleaved_write_frame') ||
+              message.includes('Broken pipe') ||
+              message.includes('End of file') ||
+              message.includes('Connection timed out') ||
+              message.includes('Network is unreachable')) {
             streamErrorMessages.set(streamId, message);
           }
         }
@@ -428,33 +439,38 @@ async function startStream(streamId) {
             // Allow restart for longer runtime if it's a recoverable error
             const runtimeInfo = getStreamRuntimeInfo(streamId);
             
-            // Special handling for "Connection reset by peer" errors - allow restart even for longer streams
-            // as this is usually a network issue that can be resolved
+            // Special handling for network-related errors - allow restart for much longer streams
+            // as these are usually temporary network issues that can be resolved
             const trackedError = streamErrorMessages.get(streamId);
-            const isConnectionResetError = trackedError && (
+            const isNetworkError = trackedError && (
               trackedError.includes('Connection reset by peer') || 
-              trackedError.includes('av_interleaved_write_frame')
+              trackedError.includes('av_interleaved_write_frame') ||
+              trackedError.includes('Broken pipe') ||
+              trackedError.includes('End of file') ||
+              trackedError.includes('Connection timed out') ||
+              trackedError.includes('Network is unreachable')
             );
             
             let allowRestart;
-            if (isConnectionResetError) {
-              // For connection reset errors, allow restart up to 8 hours (480 minutes)
+            if (isNetworkError) {
+              // For network errors, allow restart up to 24 hours (1440 minutes)
               // This handles network issues that commonly occur with long streams
-              allowRestart = runtimeInfo.totalRuntimeMinutes < 480;
-              console.log(`[StreamingService] Connection reset error detected for stream ${streamId}, allowing restart up to 480 minutes runtime`);
+              allowRestart = runtimeInfo.totalRuntimeMinutes < 1440;
+              console.log(`[StreamingService] Network error detected for stream ${streamId}, allowing restart up to 1440 minutes runtime`);
             } else {
-              // For other error code 1, use standard 60 minute limit
-              allowRestart = runtimeInfo.totalRuntimeMinutes < 60;
+              // For other error code 1, use extended 4 hour limit (240 minutes)
+              allowRestart = runtimeInfo.totalRuntimeMinutes < 240;
+              console.log(`[StreamingService] Standard error code 1 for stream ${streamId}, allowing restart up to 240 minutes runtime`);
             }
             
             if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
               streamRetryCount.set(streamId, retryCount + 1);
-              const restartType = isConnectionResetError ? 'connection reset' : `error code ${code}`;
+              const restartType = isNetworkError ? 'network error' : `error code ${code}`;
               console.log(`[StreamingService] FFmpeg exited with recoverable ${restartType}. Attempting restart #${retryCount + 1} for stream ${streamId}`);
               addStreamLog(streamId, `FFmpeg exited with recoverable ${restartType}. Attempting restart #${retryCount + 1}`);
               
-              // For connection reset errors, wait longer before restart to allow network to stabilize
-              const restartDelay = isConnectionResetError ? 10000 : 3000; // 10 seconds for connection reset, 3 seconds for others
+              // For network errors, wait longer before restart to allow network to stabilize
+              const restartDelay = isNetworkError ? 10000 : 3000; // 10 seconds for network errors, 3 seconds for others
               
               setTimeout(async () => {
                 try {
@@ -476,7 +492,7 @@ async function startStream(streamId) {
               console.error(`[StreamingService] Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached for stream ${streamId}`);
               addStreamLog(streamId, `Maximum retry attempts (${MAX_RETRY_ATTEMPTS}) reached, stopping stream`);
             } else {
-              const reason = isConnectionResetError ? 'connection reset error' : `error code ${code}`;
+              const reason = isNetworkError ? 'network error' : `error code ${code}`;
               console.log(`[StreamingService] Stream ${streamId} runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for ${reason}`);
               addStreamLog(streamId, `Stream runtime too long (${runtimeInfo.totalRuntimeMinutes}min), not restarting for ${reason}`);
             }
@@ -788,6 +804,26 @@ function resetStreamRuntime(streamId) {
   console.log(`[StreamingService] Reset runtime tracking for stream ${streamId}`);
 }
 
+// Function to check if a stream should have its runtime reset (if it's been offline for a while)
+async function shouldResetRuntime(streamId) {
+  try {
+    const stream = await Stream.findById(streamId);
+    if (!stream || stream.status !== 'offline') {
+      return false;
+    }
+    
+    // If stream has been offline for more than 1 hour, reset runtime tracking
+    const lastUpdate = stream.status_updated_at ? new Date(stream.status_updated_at).getTime() : 0;
+    const offlineDuration = Date.now() - lastUpdate;
+    const oneHour = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    return offlineDuration > oneHour;
+  } catch (error) {
+    console.error(`[StreamingService] Error checking runtime reset for stream ${streamId}: ${error.message}`);
+    return false;
+  }
+}
+
 async function saveStreamHistory(stream) {
   try {
     if (!stream.start_time) {
@@ -910,5 +946,6 @@ module.exports = {
   saveStreamHistory,
   getStreamRuntimeInfo,
   resetStreamRuntime,
+  shouldResetRuntime,
   cleanupZombieProcesses
 };
