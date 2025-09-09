@@ -458,9 +458,9 @@ async function startStream(streamId) {
               allowRestart = runtimeInfo.totalRuntimeMinutes < 1440;
               console.log(`[StreamingService] Network error detected for stream ${streamId}, allowing restart up to 1440 minutes runtime`);
             } else {
-              // For other error code 1, use extended 4 hour limit (240 minutes)
-              allowRestart = runtimeInfo.totalRuntimeMinutes < 240;
-              console.log(`[StreamingService] Standard error code 1 for stream ${streamId}, allowing restart up to 240 minutes runtime`);
+              // For other error code 1, use extended limit (1000 minutes)
+              allowRestart = runtimeInfo.totalRuntimeMinutes < 1000;
+              console.log(`[StreamingService] Standard error code 1 for stream ${streamId}, allowing restart up to 1000 minutes runtime`);
             }
             
             if (retryCount < MAX_RETRY_ATTEMPTS && allowRestart) {
