@@ -624,6 +624,13 @@ async function startStream(streamId) {
       console.log(`[StreamingService] Scheduling stream ${streamId} termination after ${remainingMinutes} minutes (remaining)`);
       addStreamLog(streamId, `Scheduled termination after ${remainingMinutes} minutes (remaining)`);
       schedulerService.scheduleStreamTermination(streamId, remainingMinutes);
+      // Persist remaining minutes so Dashboard shows remaining, not original
+      try {
+        await Stream.update(streamId, { duration: remainingMinutes });
+        addStreamLog(streamId, `Updated stored duration to remaining: ${remainingMinutes} minutes`);
+      } catch (e) {
+        console.warn(`[StreamingService] Failed to update remaining duration for ${streamId}: ${e.message}`);
+      }
     } else if (stream.duration && typeof schedulerService !== 'undefined') {
       // Fallback to original duration if no remaining duration calculated
       schedulerService.scheduleStreamTermination(streamId, stream.duration);
