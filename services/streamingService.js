@@ -21,6 +21,7 @@ const streamRetryCount = new Map();
 const streamStartTimes = new Map(); // Track actual start time for each stream
 const streamTotalRuntime = new Map(); // Track total runtime across restarts
 const streamErrorMessages = new Map(); // Track error messages for better restart logic
+const streamLastTimestampSeconds = new Map(); // Track last precise pts timestamp from FFmpeg
 const MAX_RETRY_ATTEMPTS = 3;
 const manuallyStoppingStreams = new Set();
 const MAX_LOG_LINES = 100;
@@ -91,7 +92,50 @@ async function safeKillProcess(process, streamId) {
   });
 }
 
-async function buildFFmpegArgs(stream) {
+// Cache for video durations to avoid repeated probes
+const videoDurationCache = new Map();
+
+function parseFfprobeDuration(output) {
+  // ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "file"
+  const trimmed = (output || '').toString().trim();
+  const seconds = parseFloat(trimmed);
+  return Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : null;
+}
+
+async function getVideoDurationSeconds(videoPath) {
+  if (videoDurationCache.has(videoPath)) {
+    return videoDurationCache.get(videoPath);
+  }
+  return await new Promise((resolve) => {
+    try {
+      const ffprobeCmd = process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe';
+      const probe = spawn(ffprobeCmd, [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=nw=1:nk=1',
+        videoPath
+      ]);
+      let stdout = '';
+      let stderr = '';
+      probe.stdout.on('data', d => { stdout += d.toString(); });
+      probe.stderr.on('data', d => { stderr += d.toString(); });
+      probe.on('close', () => {
+        const secs = parseFfprobeDuration(stdout);
+        if (secs !== null) {
+          videoDurationCache.set(videoPath, secs);
+          resolve(secs);
+        } else {
+          resolve(null);
+        }
+      });
+      probe.on('error', () => resolve(null));
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+async function buildFFmpegArgs(stream, seekSeconds) {
   const video = await Video.findById(stream.video_id);
   if (!video) {
     throw new Error(`Video record not found in database for video_id: ${stream.video_id}`);
@@ -111,28 +155,52 @@ async function buildFFmpegArgs(stream) {
   const rtmpUrl = `${stream.rtmp_url.replace(/\/$/, '')}/${stream.stream_key}`;
   const loopOption = stream.loop_video ? '-stream_loop' : '-stream_loop 0';
   const loopValue = stream.loop_video ? '-1' : '0';
+
+  // Determine effective seek position
+  let effectiveSeek = null;
+  if (typeof seekSeconds === 'number' && seekSeconds > 0) {
+    effectiveSeek = seekSeconds;
+    if (stream.loop_video) {
+      // If we can get duration, modulo it to resume within the loop
+      const durationSeconds = await getVideoDurationSeconds(videoPath);
+      if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+        effectiveSeek = effectiveSeek % durationSeconds;
+      }
+    }
+  }
   if (!stream.use_advanced_settings) {
-    return [
+    const args = [
       '-hwaccel', 'none',
       '-loglevel', 'error',
       '-re',
       '-fflags', '+genpts+igndts',
       loopOption, loopValue,
+    ];
+    if (effectiveSeek !== null) {
+      args.push('-ss', effectiveSeek.toString());
+    }
+    args.push(
       '-i', videoPath,
       '-c:v', 'copy',
       '-c:a', 'copy',
       '-f', 'flv',
       rtmpUrl
-    ];
+    );
+    return args;
   }
   const resolution = stream.resolution || '1280x720';
   const bitrate = stream.bitrate || 2500;
   const fps = stream.fps || 30;
-  return [
+  const advArgs = [
     '-hwaccel', 'none',
     '-loglevel', 'error',
     '-re',
     loopOption, loopValue,
+  ];
+  if (effectiveSeek !== null) {
+    advArgs.push('-ss', effectiveSeek.toString());
+  }
+  advArgs.push(
     '-i', videoPath,
     '-c:v', 'libx264',
     '-preset', 'veryfast',
@@ -148,7 +216,8 @@ async function buildFFmpegArgs(stream) {
     '-ar', '44100',
     '-f', 'flv',
     rtmpUrl
-  ];
+  );
+  return advArgs;
 }
 async function startStream(streamId) {
   try {
@@ -203,7 +272,12 @@ async function startStream(streamId) {
       addStreamLog(streamId, `Starting stream with ${Math.floor(remainingDuration/60000)} minutes remaining out of ${stream.duration} total`);
     }
 
-    const ffmpegArgs = await buildFFmpegArgs(stream);
+    // Calculate seek offset using last precise timestamp if available, otherwise accumulated runtime
+    const lastPts = streamLastTimestampSeconds.get(streamId);
+    const seekSeconds = Number.isFinite(lastPts) && lastPts > 0
+      ? Math.floor(lastPts)
+      : (totalRuntime > 0 ? Math.floor(totalRuntime / 1000) : null);
+    const ffmpegArgs = await buildFFmpegArgs(stream, seekSeconds);
     const fullCommand = `${ffmpegPath} ${ffmpegArgs.join(' ')}`;
     addStreamLog(streamId, `Starting stream with command: ${fullCommand}`);
     console.log(`Starting stream: ${fullCommand}`);
@@ -248,6 +322,18 @@ async function startStream(streamId) {
       const message = data.toString().trim();
       if (message) {
         addStreamLog(streamId, `[FFmpeg] ${message}`);
+        // Capture precise playback timestamp if present, e.g. time=00:12:34.56
+        const timeMatch = message.match(/time=(\d{2}):(\d{2}):(\d{2})(?:[\.,](\d{1,3}))?/);
+        if (timeMatch) {
+          const hh = parseInt(timeMatch[1], 10) || 0;
+          const mm = parseInt(timeMatch[2], 10) || 0;
+          const ss = parseInt(timeMatch[3], 10) || 0;
+          const ms = timeMatch[4] ? parseInt(timeMatch[4].padEnd(3, '0'), 10) : 0;
+          const seconds = hh * 3600 + mm * 60 + ss + (ms / 1000);
+          if (Number.isFinite(seconds)) {
+            streamLastTimestampSeconds.set(streamId, seconds);
+          }
+        }
         if (!message.includes('frame=')) {
           console.error(`[FFMPEG_STDERR] ${streamId}: ${message}`);
           // Track error messages for better restart logic
@@ -283,6 +369,7 @@ async function startStream(streamId) {
       
       // Clean up error message tracking
       streamErrorMessages.delete(streamId);
+      streamLastTimestampSeconds.delete(streamId);
       
       if (isManualStop) {
         console.log(`[StreamingService] Stream ${streamId} was manually stopped, not restarting`);
