@@ -1177,6 +1177,16 @@ app.get('/api/streams', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch streams' });
   }
 });
+// Bulk delete offline streams must be declared BEFORE parameterized routes
+app.delete('/api/streams/offline', isAuthenticated, async (req, res) => {
+  try {
+    const result = await Stream.deleteOffline(req.session.userId);
+    return res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error('Error deleting offline streams:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete offline streams' });
+  }
+});
 app.post('/api/streams', isAuthenticated, [
   body('streamTitle').trim().isLength({ min: 1 }).withMessage('Title is required'),
   body('rtmpUrl').trim().isLength({ min: 1 }).withMessage('RTMP URL is required'),
@@ -1331,15 +1341,6 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error deleting stream:', error);
     res.status(500).json({ success: false, error: 'Failed to delete stream' });
-  }
-});
-app.delete('/api/streams/offline', isAuthenticated, async (req, res) => {
-  try {
-    const result = await Stream.deleteOffline(req.session.userId);
-    return res.json({ success: true, deletedCount: result.deletedCount });
-  } catch (error) {
-    console.error('Error deleting offline streams:', error);
-    return res.status(500).json({ success: false, error: 'Failed to delete offline streams' });
   }
 });
 app.post('/api/streams/:id/status', isAuthenticated, [
