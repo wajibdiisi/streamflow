@@ -133,6 +133,12 @@
             class="w-full bg-dark-700 border border-gray-600 text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary">
           <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
         </div>
+        <button id="deleteOfflineBtn"
+          class="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+          title="Delete all offline streams">
+          <i class="ti ti-trash"></i>
+          <span>Delete Offline</span>
+        </button>
         <button onclick="openNewStreamModal()"
           class="w-full sm:w-auto flex items-center justify-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
           <i class="ti ti-plus"></i>
@@ -1439,6 +1445,31 @@
           `;
         }
       }
+    });
+    // Delete all offline streams
+    document.getElementById('deleteOfflineBtn')?.addEventListener('click', function () {
+      if (!confirm('Hapus semua livestream berstatus offline? Tindakan ini tidak bisa dibatalkan.')) return;
+      const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
+      fetch('/api/streams/offline', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+        }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert(`Berhasil menghapus ${data.deletedCount} stream offline.`);
+          window.location.reload();
+        } else {
+          alert('Gagal menghapus stream offline.');
+        }
+      })
+      .catch(err => {
+        console.error('Delete offline error:', err);
+        alert('Terjadi kesalahan saat menghapus stream offline.');
+      });
     });
     function startStream(streamId) {
       if (!streamId) return;

@@ -1333,6 +1333,15 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to delete stream' });
   }
 });
+app.delete('/api/streams/offline', isAuthenticated, async (req, res) => {
+  try {
+    const result = await Stream.deleteOffline(req.session.userId);
+    return res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error('Error deleting offline streams:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete offline streams' });
+  }
+});
 app.post('/api/streams/:id/status', isAuthenticated, [
   body('status').isIn(['live', 'offline', 'scheduled']).withMessage('Invalid status')
 ], async (req, res) => {

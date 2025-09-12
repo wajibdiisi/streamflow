@@ -145,6 +145,21 @@ class Stream {
       );
     });
   }
+  static deleteOffline(userId) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        "DELETE FROM streams WHERE user_id = ? AND status = 'offline'",
+        [userId],
+        function (err) {
+          if (err) {
+            console.error('Error deleting offline streams:', err.message);
+            return reject(err);
+          }
+          resolve({ success: true, deletedCount: this.changes || 0 });
+        }
+      );
+    });
+  }
   static updateStatus(id, status, userId) {
     const status_updated_at = new Date().toISOString();
     let start_time = null;
