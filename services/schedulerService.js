@@ -63,13 +63,15 @@ async function checkStreamDurations() {
         continue;
       }
       
-      if (stream.duration && stream.start_time) {
+      if (typeof stream.duration === 'number' && stream.duration > 0 && stream.start_time) {
         // Get runtime info from streaming service
         const runtimeInfo = streamingService.getStreamRuntimeInfo ? 
           streamingService.getStreamRuntimeInfo(stream.id) : null;
         
-        if (runtimeInfo && runtimeInfo.totalRuntimeMinutes >= stream.duration) {
-          console.log(`Stream ${stream.id} exceeded duration (${runtimeInfo.totalRuntimeMinutes}min >= ${stream.duration}min), stopping now`);
+        // Use current session runtime to compare with remaining minutes stored in DB
+        const currentSessionMinutes = runtimeInfo ? runtimeInfo.currentSessionRuntimeMinutes : null;
+        if (runtimeInfo && currentSessionMinutes !== null && currentSessionMinutes >= stream.duration) {
+          console.log(`Stream ${stream.id} exceeded remaining duration (${currentSessionMinutes}min >= ${stream.duration}min), stopping now`);
           
           // Mark stream as being stopped to prevent duplicate attempts
           streamsBeingStopped.add(stream.id);
@@ -84,9 +86,10 @@ async function checkStreamDurations() {
           }
         } else if (runtimeInfo) {
           // Calculate remaining time based on tracked runtime
-          const remainingMinutes = Math.max(0, stream.duration - runtimeInfo.totalRuntimeMinutes);
+          const baseline = currentSessionMinutes !== null ? currentSessionMinutes : runtimeInfo.totalRuntimeMinutes;
+          const remainingMinutes = Math.max(0, stream.duration - baseline);
           if (remainingMinutes > 0) {
-            console.log(`Stream ${stream.id} - Total runtime: ${runtimeInfo.totalRuntimeMinutes}min, Remaining: ${remainingMinutes}min`);
+            console.log(`Stream ${stream.id} - Session runtime: ${baseline}min, Remaining: ${remainingMinutes}min`);
             scheduleStreamTermination(stream.id, remainingMinutes);
           }
         } else {

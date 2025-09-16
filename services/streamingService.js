@@ -255,21 +255,20 @@ async function startStream(streamId) {
     // Track start time and calculate remaining duration
     const now = new Date();
     const totalRuntime = streamTotalRuntime.get(streamId) || 0;
-    const originalDuration = stream.duration ? stream.duration * 60 * 1000 : null; // Convert to milliseconds
-    
-    if (originalDuration && totalRuntime >= originalDuration) {
-      console.log(`[StreamingService] Stream ${streamId} has already exceeded its total duration (${totalRuntime}ms >= ${originalDuration}ms)`);
-      addStreamLog(streamId, `Stream exceeded total duration, not restarting`);
-      await Stream.updateStatus(streamId, 'offline', stream.user_id);
-      return { success: false, error: 'Stream duration exceeded' };
-    }
-
-    // Calculate remaining duration
+    // IMPORTANT: In this app, `stream.duration` is treated as remaining minutes on restarts.
+    // Therefore, do not compare accumulated total runtime against it here. Just use it as remaining.
+    // If it's zero or negative, refuse to start.
     let remainingDuration = null;
-    if (originalDuration) {
-      remainingDuration = Math.max(0, originalDuration - totalRuntime);
-      console.log(`[StreamingService] Stream ${streamId} - Total runtime: ${Math.floor(totalRuntime/60000)}min, Remaining: ${Math.floor(remainingDuration/60000)}min`);
-      addStreamLog(streamId, `Starting stream with ${Math.floor(remainingDuration/60000)} minutes remaining out of ${stream.duration} total`);
+    if (typeof stream.duration === 'number') {
+      if (stream.duration <= 0) {
+        console.log(`[StreamingService] Stream ${streamId} has no remaining time (duration<=0), not starting`);
+        addStreamLog(streamId, `No remaining minutes, not starting`);
+        await Stream.updateStatus(streamId, 'offline', stream.user_id);
+        return { success: false, error: 'No remaining minutes' };
+      }
+      remainingDuration = stream.duration * 60 * 1000;
+      console.log(`[StreamingService] Stream ${streamId} - Total runtime so far: ${Math.floor(totalRuntime/60000)}min, Remaining (from DB): ${stream.duration}min`);
+      addStreamLog(streamId, `Starting stream with ${stream.duration} minutes remaining`);
     }
 
     // Calculate seek offset using last precise timestamp if available, otherwise accumulated runtime
@@ -362,6 +361,21 @@ async function startStream(streamId) {
         
         console.log(`[StreamingService] Stream ${streamId} session runtime: ${Math.floor(sessionRuntime/60000)}min, Total runtime: ${Math.floor((currentTotal + sessionRuntime)/60000)}min`);
         addStreamLog(streamId, `Session runtime: ${Math.floor(sessionRuntime/60000)}min, Total runtime: ${Math.floor((currentTotal + sessionRuntime)/60000)}min`);
+
+        // Decrement remaining minutes and persist
+        try {
+          const s = await Stream.findById(streamId);
+          if (s && typeof s.duration === 'number') {
+            const minutesThisSession = Math.ceil(sessionRuntime / 60000);
+            const newRemaining = Math.max(0, s.duration - minutesThisSession);
+            if (newRemaining !== s.duration) {
+              await Stream.update(streamId, { duration: newRemaining });
+              addStreamLog(streamId, `Updated remaining minutes to ${newRemaining} after this session`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[StreamingService] Failed updating remaining minutes for ${streamId}: ${e.message}`);
+        }
       }
       
       const wasActive = activeStreams.delete(streamId);
@@ -387,24 +401,21 @@ async function startStream(streamId) {
         return;
       }
 
-      // Check if stream has exceeded total duration
+      // Check remaining minutes; if none left, do not restart
       const totalRuntime = streamTotalRuntime.get(streamId) || 0;
       const stream = await Stream.findById(streamId);
-      if (stream && stream.duration) {
-        const maxDurationMs = stream.duration * 60 * 1000;
-        if (totalRuntime >= maxDurationMs) {
-          console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(totalRuntime/60000)}min >= ${stream.duration}min), not restarting`);
-          addStreamLog(streamId, `Stream exceeded total duration, not restarting`);
-          try {
-            await Stream.updateStatus(streamId, 'offline');
-            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-              schedulerService.handleStreamStopped(streamId);
-            }
-          } catch (error) {
-            console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+      if (stream && typeof stream.duration === 'number' && stream.duration <= 0) {
+        console.log(`[StreamingService] Stream ${streamId} has no remaining minutes, not restarting`);
+        addStreamLog(streamId, `No remaining minutes, not restarting`);
+        try {
+          await Stream.updateStatus(streamId, 'offline');
+          if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+            schedulerService.handleStreamStopped(streamId);
           }
-          return;
+        } catch (error) {
+          console.error(`[StreamingService] Error updating stream status after remaining reached zero: ${error.message}`);
         }
+        return;
       }
 
       // Additional check: if stream status is already 'offline' in database, don't restart
@@ -416,24 +427,20 @@ async function startStream(streamId) {
       }
 
       if (signal === 'SIGSEGV') {
-        // Check if stream has exceeded total duration before attempting restart
-        const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+        // Check remaining minutes before attempting restart
         const currentStream = await Stream.findById(streamId);
-        if (currentStream && currentStream.duration) {
-          const maxDurationMs = currentStream.duration * 60 * 1000;
-          if (currentTotalRuntime >= maxDurationMs) {
-            console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to SIGSEGV`);
-            addStreamLog(streamId, `Stream exceeded total duration, not restarting due to SIGSEGV`);
-            try {
-              await Stream.updateStatus(streamId, 'offline');
-              if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-                schedulerService.handleStreamStopped(streamId);
-              }
-            } catch (error) {
-              console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+        if (currentStream && typeof currentStream.duration === 'number' && currentStream.duration <= 0) {
+          console.log(`[StreamingService] Stream ${streamId} has no remaining minutes, not restarting due to SIGSEGV`);
+          addStreamLog(streamId, `No remaining minutes, not restarting due to SIGSEGV`);
+          try {
+            await Stream.updateStatus(streamId, 'offline');
+            if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+              schedulerService.handleStreamStopped(streamId);
             }
-            return;
+          } catch (error) {
+            console.error(`[StreamingService] Error updating stream status after remaining reached zero: ${error.message}`);
           }
+          return;
         }
 
         // Additional check: if stream status is already 'offline' in database, don't restart
@@ -489,24 +496,20 @@ async function startStream(streamId) {
           addStreamLog(streamId, errorMessage);
           console.error(`[StreamingService] ${errorMessage} for stream ${streamId}`);
           
-          // Check again if stream has exceeded total duration before attempting restart
-          const currentTotalRuntime = streamTotalRuntime.get(streamId) || 0;
+          // Check remaining minutes again before attempting restart
           const currentStream = await Stream.findById(streamId);
-          if (currentStream && currentStream.duration) {
-            const maxDurationMs = currentStream.duration * 60 * 1000;
-            if (currentTotalRuntime >= maxDurationMs) {
-              console.log(`[StreamingService] Stream ${streamId} has exceeded total duration (${Math.floor(currentTotalRuntime/60000)}min >= ${currentStream.duration}min), not restarting due to error code ${code}`);
-              addStreamLog(streamId, `Stream exceeded total duration, not restarting due to error code ${code}`);
-              try {
-                await Stream.updateStatus(streamId, 'offline');
-                if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
-                  schedulerService.handleStreamStopped(streamId);
-                }
-              } catch (error) {
-                console.error(`[StreamingService] Error updating stream status after duration exceeded: ${error.message}`);
+          if (currentStream && typeof currentStream.duration === 'number' && currentStream.duration <= 0) {
+            console.log(`[StreamingService] Stream ${streamId} has no remaining minutes, not restarting due to error code ${code}`);
+            addStreamLog(streamId, `No remaining minutes, not restarting due to error code ${code}`);
+            try {
+              await Stream.updateStatus(streamId, 'offline');
+              if (typeof schedulerService !== 'undefined' && schedulerService.cancelStreamTermination) {
+                schedulerService.handleStreamStopped(streamId);
               }
-              return;
+            } catch (error) {
+              console.error(`[StreamingService] Error updating stream status after remaining reached zero: ${error.message}`);
             }
+            return;
           }
 
           // Additional check: if stream status is already 'offline' in database, don't restart
