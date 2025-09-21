@@ -170,10 +170,7 @@ async function buildFFmpegArgs(stream, seekSeconds) {
   }
   if (!stream.use_advanced_settings) {
     const args = [
-      '-hwaccel', 'none',
-      '-loglevel', 'error',
       '-re',
-      '-fflags', '+genpts+igndts',
       loopOption, loopValue,
     ];
     if (effectiveSeek !== null) {
@@ -181,9 +178,7 @@ async function buildFFmpegArgs(stream, seekSeconds) {
     }
     args.push(
       '-i', videoPath,
-      '-c:v', 'copy',
-      '-c:a', 'copy',
-      '-f', 'flv',
+'-c', 'copy', '-f', 'flv', '-loglevel', 'debug', '-nostats',
       rtmpUrl
     );
     return args;
