@@ -645,3 +645,9 @@
 2025-09-28T11:04:33.968Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
 2025-09-28T11:04:33.983Z [LOG] Checking for scheduled streams (2025-09-28T11:04:33.983Z to 2025-09-28T11:05:33.983Z)
 2025-09-28T11:05:33.991Z [LOG] Checking for scheduled streams (2025-09-28T11:05:33.991Z to 2025-09-28T11:06:33.991Z)
+2025-09-28T11:06:33.969Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T11:06:33.970Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T11:06:33.999Z [LOG] Checking for scheduled streams (2025-09-28T11:06:33.999Z to 2025-09-28T11:07:33.999Z)
+2025-09-28T11:07:33.968Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T11:07:33.970Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T11:07:34.000Z [LOG] Checking for scheduled streams (2025-09-28T11:07:33.999Z to 2025-09-28T11:08:33.999Z)
