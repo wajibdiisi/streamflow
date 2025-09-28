@@ -664,3 +664,13 @@
 2025-09-28T11:08:46.656Z [LOG] Checking for scheduled streams (2025-09-28T11:08:46.655Z to 2025-09-28T11:09:46.655Z)
 2025-09-28T11:08:46.656Z [LOG] [StreamingService] Syncing stream statuses...
 2025-09-28T11:08:46.658Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T11:16:01.749Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T11:16:02.005Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T11:16:02.023Z [LOG] StreamFlow running at:
+2025-09-28T11:16:02.023Z [LOG]   http://192.168.1.3:7575
+2025-09-28T11:16:02.024Z [LOG]   http://169.254.190.42:7575
+2025-09-28T11:16:02.024Z [LOG]   http://169.254.13.154:7575
+2025-09-28T11:16:02.026Z [LOG] Stream scheduler initialized
+2025-09-28T11:16:02.027Z [LOG] Checking for scheduled streams (2025-09-28T11:16:02.027Z to 2025-09-28T11:17:02.027Z)
+2025-09-28T11:16:02.028Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T11:16:02.029Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
