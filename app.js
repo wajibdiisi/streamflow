@@ -458,6 +458,22 @@ app.get('/gallery', isAuthenticated, async (req, res) => {
     res.redirect('/dashboard');
   }
 });
+
+app.get('/folders', isAuthenticated, async (req, res) => {
+  try {
+    const videos = await Video.findAll(req.session.userId);
+    res.render('folders', {
+      title: 'Folder Manager',
+      active: 'folders',
+      user: await User.findById(req.session.userId),
+      videos: videos
+    });
+  } catch (error) {
+    console.error('Folders error:', error);
+    res.redirect('/dashboard');
+  }
+});
+
 app.get('/settings', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
@@ -784,7 +800,7 @@ app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (r
 app.post('/api/videos/upload', isAuthenticated, videoUpload.single('video'), async (req, res) => {
   try {
     console.log('Upload request received:', req.file);
-    
+
     if (!req.file) {
       return res.status(400).json({ error: 'No video file provided' });
     }
@@ -792,6 +808,41 @@ app.post('/api/videos/upload', isAuthenticated, videoUpload.single('video'), asy
     const filePath = `/uploads/videos/${req.file.filename}`;
     const fullFilePath = path.join(__dirname, 'public', filePath);
     const fileSize = req.file.size;
+    const folderPath = req.body.folderPath || 'Default';
+
+    // Create folder if it doesn't exist and it's not 'Default'
+    if (folderPath !== 'Default') {
+      try {
+        const existingFolder = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT 1 FROM folders WHERE user_id = ? AND name = ? LIMIT 1',
+            [req.session.userId, folderPath],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!existingFolder) {
+          const folderId = uuidv4();
+          await new Promise((resolve, reject) => {
+            db.run(
+              'INSERT INTO folders (id, name, user_id) VALUES (?, ?, ?)',
+              [folderId, folderPath, req.session.userId],
+              function (err) {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+          console.log(`Created new folder: ${folderPath}`);
+        }
+      } catch (error) {
+        console.error('Error creating folder:', error);
+        // Continue with upload even if folder creation fails
+      }
+    }
     await new Promise((resolve, reject) => {
       ffmpeg.ffprobe(fullFilePath, (err, metadata) => {
         if (err) {
@@ -836,6 +887,7 @@ app.post('/api/videos/upload', isAuthenticated, videoUpload.single('video'), asy
                 resolution,
                 bitrate,
                 fps,
+                folder_path: folderPath,
                 user_id: req.session.userId
               };
               const video = await Video.create(videoData);
@@ -858,12 +910,265 @@ app.post('/api/videos/upload', isAuthenticated, videoUpload.single('video'), asy
     });
   } catch (error) {
     console.error('Upload error details:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to upload video',
-      details: error.message 
+      details: error.message
     });
   }
 });
+app.get('/api/videos/folders', isAuthenticated, async (req, res) => {
+  try {
+    // Get folders from both the folders table and from videos (for backward compatibility)
+    const customFolders = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT name FROM folders WHERE user_id = ? ORDER BY name',
+        [req.session.userId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows.map(row => row.name));
+        }
+      );
+    });
+
+    const videoFolders = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT DISTINCT folder_path FROM videos WHERE user_id = ? AND folder_path IS NOT NULL ORDER BY folder_path',
+        [req.session.userId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows.map(row => row.folder_path));
+        }
+      );
+    });
+
+    // Combine and deduplicate folders
+    const allFolders = [...new Set([...customFolders, ...videoFolders])];
+
+    // Ensure Default folder is always present
+    if (!allFolders.includes('Default')) {
+      allFolders.unshift('Default');
+    }
+
+    res.json({ success: true, folders: allFolders.sort() });
+  } catch (error) {
+    console.error('Error fetching folders:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch folders' });
+  }
+});
+
+app.post('/api/videos/folders', isAuthenticated, [
+  body('folderName').trim().isLength({ min: 1 }).withMessage('Folder name is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { folderName } = req.body;
+
+    if (folderName === 'Default') {
+      return res.status(400).json({ success: false, error: 'Cannot create folder with reserved name "Default"' });
+    }
+
+    // Check if folder already exists in folders table
+    const existingCustomFolder = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT 1 FROM folders WHERE user_id = ? AND name = ? LIMIT 1',
+        [req.session.userId, folderName],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (existingCustomFolder) {
+      return res.status(400).json({ success: false, error: 'Folder already exists' });
+    }
+
+    // Check if folder exists in videos table (for backward compatibility)
+    const existingVideoFolder = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT 1 FROM videos WHERE user_id = ? AND folder_path = ? LIMIT 1',
+        [req.session.userId, folderName],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (existingVideoFolder) {
+      return res.status(400).json({ success: false, error: 'Folder already exists' });
+    }
+
+    // Create the folder in the folders table
+    const folderId = uuidv4();
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO folders (id, name, user_id) VALUES (?, ?, ?)',
+        [folderId, folderName, req.session.userId],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Folder created successfully', folderName });
+  } catch (error) {
+    console.error('Error creating folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to create folder' });
+  }
+});
+
+app.put('/api/videos/:id/move', isAuthenticated, [
+  body('folderPath').trim().isLength({ min: 1 }).withMessage('Folder path is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const videoId = req.params.id;
+    const { folderPath } = req.body;
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ success: false, error: 'Video not found' });
+    }
+
+    if (video.user_id !== req.session.userId) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    await Video.update(videoId, { folder_path: folderPath });
+    res.json({ success: true, message: 'Video moved successfully' });
+  } catch (error) {
+    console.error('Error moving video:', error);
+    res.status(500).json({ success: false, error: 'Failed to move video' });
+  }
+});
+
+app.put('/api/folders/:folderName/rename', isAuthenticated, [
+  body('newName').trim().isLength({ min: 1 }).withMessage('New folder name is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { folderName } = req.params;
+    const { newName } = req.body;
+
+    if (folderName === 'Default') {
+      return res.status(400).json({ success: false, error: 'Cannot rename default folder' });
+    }
+
+    if (newName === 'Default') {
+      return res.status(400).json({ success: false, error: 'Cannot use reserved name "Default"' });
+    }
+
+    // Check if new name already exists
+    const existingFolder = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT 1 FROM folders WHERE user_id = ? AND name = ? LIMIT 1',
+        [req.session.userId, newName],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    const existingVideoFolder = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT 1 FROM videos WHERE user_id = ? AND folder_path = ? LIMIT 1',
+        [req.session.userId, newName],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+
+    if (existingFolder || existingVideoFolder) {
+      return res.status(400).json({ success: false, error: 'Folder name already exists' });
+    }
+
+    // Update folder name in folders table
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE folders SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND name = ?',
+        [newName, req.session.userId, folderName],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // Update all videos in the folder
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE videos SET folder_path = ? WHERE user_id = ? AND folder_path = ?',
+        [newName, req.session.userId, folderName],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Folder renamed successfully' });
+  } catch (error) {
+    console.error('Error renaming folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to rename folder' });
+  }
+});
+
+app.delete('/api/folders/:folderName', isAuthenticated, async (req, res) => {
+  try {
+    const { folderName } = req.params;
+
+    if (folderName === 'Default') {
+      return res.status(400).json({ success: false, error: 'Cannot delete default folder' });
+    }
+
+    // Delete from folders table
+    await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM folders WHERE user_id = ? AND name = ?',
+        [req.session.userId, folderName],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    // Move all videos in this folder to Default
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE videos SET folder_path = ? WHERE user_id = ? AND folder_path = ?',
+        ['Default', req.session.userId, folderName],
+        function (err) {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    res.json({ success: true, message: 'Folder deleted successfully. Videos moved to Default folder.' });
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete folder' });
+  }
+});
+
 app.get('/api/videos', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
@@ -1003,14 +1308,15 @@ app.post('/api/settings/gdrive-api-key', isAuthenticated, [
   }
 });
 app.post('/api/videos/import-drive', isAuthenticated, [
-  body('driveUrl').notEmpty().withMessage('Google Drive URL is required')
+  body('driveUrl').notEmpty().withMessage('Google Drive URL is required'),
+  body('folderPath').optional().isString()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, error: errors.array()[0].msg });
     }
-    const { driveUrl } = req.body;
+    const { driveUrl, folderPath } = req.body;
     const user = await User.findById(req.session.userId);
     if (!user.gdrive_api_key) {
       return res.status(400).json({
@@ -1018,16 +1324,73 @@ app.post('/api/videos/import-drive', isAuthenticated, [
         error: 'Google Drive API key is not configured'
       });
     }
-    const { extractFileId, downloadFile } = require('./utils/googleDriveService');
+
+    // Create folder if it doesn't exist and it's not 'Default'
+    if (folderPath && folderPath !== 'Default') {
+      try {
+        const existingFolder = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT 1 FROM folders WHERE user_id = ? AND name = ? LIMIT 1',
+            [req.session.userId, folderPath],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!existingFolder) {
+          const folderId = uuidv4();
+          await new Promise((resolve, reject) => {
+            db.run(
+              'INSERT INTO folders (id, name, user_id) VALUES (?, ?, ?)',
+              [folderId, folderPath, req.session.userId],
+              function (err) {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+          console.log(`Created new folder for Google Drive import: ${folderPath}`);
+        }
+      } catch (error) {
+        console.error('Error creating folder for Google Drive import:', error);
+        // Continue with import even if folder creation fails
+      }
+    }
+    const { extractFileId, extractFolderId, isFolder } = require('./utils/googleDriveService');
     try {
-      const fileId = extractFileId(driveUrl);
+      let resourceId;
+      let isGoogleFolder = false;
+
+      // First try to extract as folder
+      try {
+        resourceId = extractFolderId(driveUrl);
+        isGoogleFolder = await isFolder(user.gdrive_api_key, resourceId);
+      } catch (folderError) {
+        // If folder extraction fails, try file extraction
+        try {
+          resourceId = extractFileId(driveUrl);
+        } catch (fileError) {
+          throw new Error('Invalid Google Drive URL format');
+        }
+      }
+
       const jobId = uuidv4();
-      processGoogleDriveImport(jobId, user.gdrive_api_key, fileId, req.session.userId)
-        .catch(err => console.error('Drive import failed:', err));
+
+      if (isGoogleFolder) {
+        processGoogleDriveFolderImport(jobId, user.gdrive_api_key, resourceId, req.session.userId, folderPath)
+          .catch(err => console.error('Drive folder import failed:', err));
+      } else {
+        processGoogleDriveImport(jobId, user.gdrive_api_key, resourceId, req.session.userId, folderPath)
+          .catch(err => console.error('Drive import failed:', err));
+      }
+
       return res.json({
         success: true,
-        message: 'Video import started',
-        jobId: jobId
+        message: isGoogleFolder ? 'Folder import started' : 'Video import started',
+        jobId: jobId,
+        isFolder: isGoogleFolder
       });
     } catch (error) {
       console.error('Google Drive URL parsing error:', error);
@@ -1052,17 +1415,19 @@ app.get('/api/videos/import-status/:jobId', isAuthenticated, async (req, res) =>
   });
 });
 const importJobs = {};
-async function processGoogleDriveImport(jobId, apiKey, fileId, userId) {
+async function processGoogleDriveImport(jobId, apiKey, fileId, userId, folderPath = 'Default') {
   const { downloadFile } = require('./utils/googleDriveService');
   const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
   const ffmpeg = require('fluent-ffmpeg');
-  
+
+  console.log('processGoogleDriveImport called with folderPath:', folderPath);
+
   importJobs[jobId] = {
     status: 'downloading',
     progress: 0,
     message: 'Starting download...'
   };
-  
+
   try {
     const result = await downloadFile(apiKey, fileId, (progress) => {
       importJobs[jobId] = {
@@ -1070,43 +1435,43 @@ async function processGoogleDriveImport(jobId, apiKey, fileId, userId) {
         progress: progress.progress,
         message: `Downloading ${progress.filename}: ${progress.progress}%`
       };
-    });
-    
+    }, folderPath);
+
     importJobs[jobId] = {
       status: 'processing',
       progress: 100,
       message: 'Processing video...'
     };
-    
+
     const videoInfo = await getVideoInfo(result.localFilePath);
-    
+
     const metadata = await new Promise((resolve, reject) => {
       ffmpeg.ffprobe(result.localFilePath, (err, metadata) => {
         if (err) return reject(err);
         resolve(metadata);
       });
     });
-    
+
     let resolution = '';
     let bitrate = null;
-    
+
     const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
     if (videoStream) {
       resolution = `${videoStream.width}x${videoStream.height}`;
     }
-    
+
     if (metadata.format && metadata.format.bit_rate) {
       bitrate = Math.round(parseInt(metadata.format.bit_rate) / 1000);
     }
-    
+
     const thumbnailName = path.basename(result.filename, path.extname(result.filename)) + '.jpg';
     const thumbnailRelativePath = await generateThumbnail(result.localFilePath, thumbnailName)
       .then(() => `/uploads/thumbnails/${thumbnailName}`)
       .catch(() => null);
-    
+
     let format = path.extname(result.filename).toLowerCase().replace('.', '');
     if (!format) format = 'mp4';
-    
+
     const videoData = {
       title: path.basename(result.originalFilename, path.extname(result.originalFilename)),
       filepath: `/uploads/videos/${result.filename}`,
@@ -1116,11 +1481,12 @@ async function processGoogleDriveImport(jobId, apiKey, fileId, userId) {
       format: format,
       resolution: resolution,
       bitrate: bitrate,
+      folder_path: folderPath,
       user_id: userId
     };
-    
+
     const video = await Video.create(videoData);
-    
+
     importJobs[jobId] = {
       status: 'complete',
       progress: 100,
@@ -1142,6 +1508,124 @@ async function processGoogleDriveImport(jobId, apiKey, fileId, userId) {
     }, 5 * 60 * 1000);
   }
 }
+
+async function processGoogleDriveFolderImport(jobId, apiKey, folderId, userId, folderPath = 'Default') {
+  const { downloadFolder } = require('./utils/googleDriveService');
+  const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
+  const ffmpeg = require('fluent-ffmpeg');
+
+  console.log('processGoogleDriveFolderImport called with folderPath:', folderPath);
+
+  importJobs[jobId] = {
+    status: 'downloading',
+    progress: 0,
+    message: 'Starting folder download...'
+  };
+
+  try {
+    const result = await downloadFolder(apiKey, folderId, (progress) => {
+      importJobs[jobId] = {
+        status: 'downloading',
+        progress: progress.progress,
+        message: `Downloading ${progress.currentFile || progress.filename}: ${progress.completed || 0}/${progress.total || 0} files (${progress.progress}%)`
+      };
+    }, folderPath);
+
+    importJobs[jobId] = {
+      status: 'processing',
+      progress: 100,
+      message: `Processing ${result.files.length} videos...`
+    };
+
+    const processedVideos = [];
+    let processedCount = 0;
+
+    for (const file of result.files) {
+      try {
+        const videoInfo = await getVideoInfo(file.localFilePath);
+
+        const metadata = await new Promise((resolve, reject) => {
+          ffmpeg.ffprobe(file.localFilePath, (err, metadata) => {
+            if (err) return reject(err);
+            resolve(metadata);
+          });
+        });
+
+        let resolution = '';
+        let bitrate = null;
+
+        const videoStream = metadata.streams.find(stream => stream.codec_type === 'video');
+        if (videoStream) {
+          resolution = `${videoStream.width}x${videoStream.height}`;
+        }
+
+        if (metadata.format && metadata.format.bit_rate) {
+          bitrate = Math.round(parseInt(metadata.format.bit_rate) / 1000);
+        }
+
+        const thumbnailName = path.basename(file.filename, path.extname(file.filename)) + '.jpg';
+        const thumbnailRelativePath = await generateThumbnail(file.localFilePath, thumbnailName)
+          .then(() => `/uploads/thumbnails/${thumbnailName}`)
+          .catch(() => null);
+
+        let format = path.extname(file.filename).toLowerCase().replace('.', '');
+        if (!format) format = 'mp4';
+
+        const videoData = {
+          title: path.basename(file.originalFilename, path.extname(file.originalFilename)),
+          filepath: `/uploads/videos/${file.filename}`,
+          thumbnail_path: thumbnailRelativePath,
+          file_size: file.fileSize,
+          duration: videoInfo.duration,
+          format: format,
+          resolution: resolution,
+          bitrate: bitrate,
+          folder_path: folderPath,
+          user_id: userId
+        };
+
+        const video = await Video.create(videoData);
+        processedVideos.push(video);
+        processedCount++;
+
+        // Update progress
+        const processingProgress = Math.round((processedCount / result.files.length) * 100);
+        importJobs[jobId] = {
+          status: 'processing',
+          progress: processingProgress,
+          message: `Processed ${processedCount}/${result.files.length} videos...`
+        };
+
+      } catch (error) {
+        console.error(`Error processing video ${file.originalFilename}:`, error);
+        // Continue with other files
+      }
+    }
+
+    importJobs[jobId] = {
+      status: 'complete',
+      progress: 100,
+      message: `Folder imported successfully: ${processedVideos.length}/${result.totalFiles} videos processed`,
+      folderName: result.folderName,
+      totalFiles: result.totalFiles,
+      processedFiles: processedVideos.length
+    };
+
+    setTimeout(() => {
+      delete importJobs[jobId];
+    }, 5 * 60 * 1000);
+  } catch (error) {
+    console.error('Error processing Google Drive folder import:', error);
+    importJobs[jobId] = {
+      status: 'failed',
+      progress: 0,
+      message: error.message || 'Failed to import folder'
+    };
+    setTimeout(() => {
+      delete importJobs[jobId];
+    }, 5 * 60 * 1000);
+  }
+}
 app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
@@ -1156,6 +1640,7 @@ app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
         thumbnail: video.thumbnail_path,
         resolution: video.resolution || '1280x720',
         duration: formattedDuration,
+        folder_path: video.folder_path || 'Default',
         url: `/stream/${video.id}`
       };
     });

@@ -39,6 +39,7 @@ function createTables() {
     resolution TEXT,
     bitrate INTEGER,
     fps TEXT,
+    folder_path TEXT DEFAULT 'Default',
     user_id TEXT,
     upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -47,6 +48,13 @@ function createTables() {
   )`, (err) => {
     if (err) {
       console.error('Error creating videos table:', err.message);
+    }
+  });
+
+  // Add folder_path column to existing videos table if it doesn't exist
+  db.run(`ALTER TABLE videos ADD COLUMN folder_path TEXT DEFAULT 'Default'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Error adding folder_path column:', err.message);
     }
   });
   db.run(`CREATE TABLE IF NOT EXISTS streams (
@@ -79,6 +87,21 @@ function createTables() {
       console.error('Error creating streams table:', err.message);
     }
   });
+
+  db.run(`CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(name, user_id)
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating folders table:', err.message);
+    }
+  });
+
   db.run(`CREATE TABLE IF NOT EXISTS stream_history (
     id TEXT PRIMARY KEY,
     stream_id TEXT,

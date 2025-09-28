@@ -1844,13 +1844,16 @@
         button.onclick = () => selectEditVideo(video);
         button.innerHTML = `
       <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
-        <img src="${video.thumbnail || '/images/default-thumbnail.jpg'}" alt="" 
-          class="w-full h-full object-cover rounded" 
+        <img src="${video.thumbnail || '/images/default-thumbnail.jpg'}" alt=""
+          class="w-full h-full object-cover rounded"
           onerror="this.src='/images/default-thumbnail.jpg'">
       </div>
       <div class="flex-1 min-w-0 ml-3">
         <p class="text-sm font-medium text-white truncate">${video.name}</p>
-        <p class="text-xs text-gray-400">${video.resolution || 'Unknown'} • ${video.duration || '00:00'}</p>
+        <div class="flex items-center text-xs text-gray-400">
+          <span>${video.resolution || 'Unknown'} • ${video.duration || '00:00'}</span>
+          ${video.folder_path ? `<span class="ml-1">• <i class="ti ti-folder mr-1"></i>${video.folder_path}</span>` : ''}
+        </div>
       </div>
     `;
         container.appendChild(button);

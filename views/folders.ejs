@@ -1,0 +1,1162 @@
+<% layout('layout') -%>
+
+<div class="lg:ml-20 min-h-screen bg-dark-900 text-white">
+  <div class="pt-16 lg:pt-0">
+    <div class="container mx-auto px-4 py-8">
+
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-bold mb-2">Folder Manager</h1>
+          <p class="text-gray-400">Organize your videos across different folders</p>
+        </div>
+        <button onclick="showCreateFolderModal()"
+          class="mt-4 sm:mt-0 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+          <i class="ti ti-folder-plus mr-2"></i>
+          New Folder
+        </button>
+      </div>
+
+      <!-- Search and Filter -->
+      <div class="mb-6">
+        <div class="flex flex-col sm:flex-row gap-4">
+          <div class="relative flex-1">
+            <input
+              type="text"
+              id="folderSearch"
+              class="w-full bg-dark-800 text-white pl-10 pr-4 py-2.5 rounded-lg border border-gray-600 focus:border-primary focus:ring-1 focus:ring-primary"
+              placeholder="Search folders and videos..."
+            >
+            <i class="ti ti-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          </div>
+          <div class="flex gap-2">
+            <button id="viewToggle" onclick="toggleView()"
+              class="px-4 py-2.5 bg-dark-800 hover:bg-dark-700 text-white rounded-lg border border-gray-600 transition-colors flex items-center">
+              <i class="ti ti-layout-grid mr-2"></i>
+              <span id="viewToggleText">Grid View</span>
+            </button>
+            <button onclick="toggleSortMenu()"
+              class="px-4 py-2.5 bg-dark-800 hover:bg-dark-700 text-white rounded-lg border border-gray-600 transition-colors flex items-center">
+              <i class="ti ti-arrows-sort mr-2"></i>
+              Sort
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content Area -->
+      <div id="mainContent" class="grid lg:grid-cols-4 gap-6">
+
+        <!-- Folders Sidebar -->
+        <div class="lg:col-span-1">
+          <div class="bg-dark-800 rounded-lg p-4 sticky top-4">
+            <h3 class="font-semibold mb-4 flex items-center">
+              <i class="ti ti-folders mr-2"></i>
+              All Folders
+            </h3>
+            <div id="foldersList" class="space-y-1">
+              <!-- Folders will be loaded here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="lg:col-span-3">
+          <!-- Current Folder Header -->
+          <div id="currentFolderHeader" class="mb-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center">
+                <i class="ti ti-folder text-2xl text-primary mr-3"></i>
+                <div>
+                  <h2 id="currentFolderName" class="text-xl font-semibold">All Videos</h2>
+                  <p id="currentFolderCount" class="text-sm text-gray-400">0 videos</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="folderOptionsBtn" onclick="toggleFolderOptions()"
+                  class="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-dark-700 transition-colors">
+                  <i class="ti ti-dots-vertical"></i>
+                </button>
+                <div id="folderOptionsMenu" class="hidden absolute right-0 top-10 z-10 w-48 bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+                  <div class="py-1">
+                    <button onclick="renameFolderDialog()" class="w-full text-left px-4 py-2 hover:bg-dark-600 flex items-center">
+                      <i class="ti ti-pencil mr-2"></i>
+                      Rename Folder
+                    </button>
+                    <button onclick="deleteFolderDialog()" class="w-full text-left px-4 py-2 hover:bg-dark-600 text-red-400 flex items-center">
+                      <i class="ti ti-trash mr-2"></i>
+                      Delete Folder
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Videos Grid -->
+          <div id="videosContainer">
+            <!-- Video Controls Header -->
+            <div id="videoControls" class="mb-4 flex items-center justify-between hidden">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center">
+                  <input type="checkbox" id="selectAllVideos" class="w-4 h-4 text-primary bg-dark-700 border-gray-600 rounded focus:ring-primary focus:ring-2">
+                  <label for="selectAllVideos" class="ml-2 text-sm text-gray-300">Select All</label>
+                </div>
+                <span id="videoCount" class="text-sm text-gray-400"></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="bulkMoveBtn" class="hidden bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                  <i class="ti ti-folder-open mr-1"></i>
+                  Move Selected
+                </button>
+                <button id="bulkDeleteBtn" class="hidden bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                  <i class="ti ti-trash mr-1"></i>
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+
+            <div id="videosGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <!-- Videos will be loaded here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12 hidden">
+              <i class="ti ti-folder-open text-6xl text-gray-600 mb-4"></i>
+              <h3 class="text-lg font-medium text-gray-300 mb-2">No videos in this folder</h3>
+              <p class="text-gray-500 mb-6">Upload videos or move them here from other folders</p>
+              <button onclick="openUploadModal()"
+                class="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                Upload Videos
+              </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="text-center py-12">
+              <i class="ti ti-loader-2 animate-spin text-4xl text-gray-400 mb-4"></i>
+              <p class="text-gray-400">Loading videos...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Folder Modal -->
+<div id="createFolderModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="bg-dark-800 rounded-lg shadow-xl border border-gray-600/50 w-full max-w-md mx-4">
+    <div class="px-6 py-5">
+      <div class="flex items-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mr-4">
+          <i class="ti ti-folder-plus text-primary text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-medium">Create New Folder</h3>
+          <p class="text-sm text-gray-400">Enter a name for your new folder</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <input
+          type="text"
+          id="newFolderName"
+          class="w-full bg-dark-700 text-white px-4 py-2.5 rounded-lg border border-gray-600 focus:border-primary focus:ring-1 focus:ring-primary"
+          placeholder="Folder name..."
+          maxlength="50"
+        >
+        <p class="text-xs text-gray-500 mt-1">Maximum 50 characters</p>
+      </div>
+    </div>
+    <div class="px-6 py-4 flex justify-end space-x-3 border-t border-gray-600/50">
+      <button onclick="closeCreateFolderModal()"
+        class="px-4 py-2.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors">
+        Cancel
+      </button>
+      <button onclick="createFolder()"
+        class="px-4 py-2.5 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors">
+        Create Folder
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Move Videos Modal -->
+<div id="moveVideosModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="bg-dark-800 rounded-lg shadow-xl border border-gray-600/50 w-full max-w-md mx-4">
+    <div class="px-6 py-5">
+      <div class="flex items-center mb-4">
+        <div class="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mr-4">
+          <i class="ti ti-folder-open text-green-400 text-2xl"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-medium">Move Videos</h3>
+          <p class="text-sm text-gray-400">Select destination folder</p>
+        </div>
+      </div>
+      <div class="mb-4">
+        <select id="destinationFolder" class="w-full bg-dark-700 text-white px-4 py-2.5 rounded-lg border border-gray-600 focus:border-primary focus:ring-1 focus:ring-primary">
+          <option value="">Select folder...</option>
+        </select>
+      </div>
+      <div class="mb-4">
+        <p class="text-sm text-gray-400 mb-2">Selected videos:</p>
+        <div id="selectedVideosList" class="max-h-32 overflow-y-auto bg-dark-700 rounded p-2 text-sm">
+          <!-- Selected videos will be listed here -->
+        </div>
+      </div>
+    </div>
+    <div class="px-6 py-4 flex justify-end space-x-3 border-t border-gray-600/50">
+      <button onclick="closeMoveVideosModal()"
+        class="px-4 py-2.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors">
+        Cancel
+      </button>
+      <button onclick="moveSelectedVideos()"
+        class="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors">
+        Move Videos
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed top-4 right-4 z-50 hidden transition-all duration-300">
+  <div class="bg-dark-700 border border-gray-600 rounded-lg p-4 shadow-lg max-w-sm">
+    <div class="flex items-center">
+      <div id="toastIcon" class="mr-3">
+        <i class="ti ti-check text-green-400"></i>
+      </div>
+      <div>
+        <p id="toastMessage" class="text-white font-medium">Success!</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentFolder = 'all';
+  let currentView = 'grid';
+  let allVideos = [];
+  let allFolders = [];
+  let selectedVideos = [];
+
+  // Initialize page
+  document.addEventListener('DOMContentLoaded', function() {
+    loadFolders();
+    loadVideos();
+    setupEventListeners();
+  });
+
+  function setupEventListeners() {
+    // Search functionality
+    document.getElementById('folderSearch').addEventListener('input', function(e) {
+      filterContent(e.target.value);
+    });
+
+    // Enter key for new folder creation
+    document.getElementById('newFolderName').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        createFolder();
+      }
+    });
+  }
+
+  // Load folders from API
+  async function loadFolders() {
+    try {
+      const response = await fetch('/api/videos/folders');
+      const data = await response.json();
+
+      if (data.success) {
+        allFolders = data.folders;
+        displayFolders();
+      }
+    } catch (error) {
+      console.error('Error loading folders:', error);
+    }
+  }
+
+  // Display folders in sidebar
+  function displayFolders() {
+    const foldersContainer = document.getElementById('foldersList');
+
+    let foldersHTML = `
+      <button onclick="selectFolder('all')"
+        class="folder-item w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${currentFolder === 'all' ? 'bg-primary text-white' : 'text-gray-300 hover:bg-dark-700'}">
+        <i class="ti ti-folders mr-2"></i>
+        <span>All Videos</span>
+        <span class="ml-auto text-xs bg-dark-600 px-2 py-0.5 rounded">${allVideos.length}</span>
+      </button>
+    `;
+
+    allFolders.forEach(folder => {
+      const videoCount = allVideos.filter(v => (v.folder_path || 'Default') === folder).length;
+      foldersHTML += `
+        <button onclick="selectFolder('${folder}')"
+          class="folder-item w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center ${currentFolder === folder ? 'bg-primary text-white' : 'text-gray-300 hover:bg-dark-700'}"
+          data-folder="${folder}"
+          ondragover="handleDragOver(event)"
+          ondragenter="handleDragEnter(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event, '${folder}')">
+          <i class="ti ti-folder mr-2"></i>
+          <span>${folder}</span>
+          <span class="ml-auto text-xs bg-dark-600 px-2 py-0.5 rounded">${videoCount}</span>
+        </button>
+      `;
+    });
+
+    foldersContainer.innerHTML = foldersHTML;
+  }
+
+  // Load videos from API
+  async function loadVideos() {
+    try {
+      const response = await fetch('/api/videos');
+      const data = await response.json();
+
+      if (data.success) {
+        allVideos = data.videos;
+        displayVideos();
+        displayFolders(); // Update folder counts
+      }
+    } catch (error) {
+      console.error('Error loading videos:', error);
+    }
+  }
+
+  // Select folder and display its contents
+  function selectFolder(folder) {
+    currentFolder = folder;
+    displayVideos();
+    displayFolders(); // Update active state
+    updateFolderHeader();
+  }
+
+  // Update folder header
+  function updateFolderHeader() {
+    const folderNameEl = document.getElementById('currentFolderName');
+    const folderCountEl = document.getElementById('currentFolderCount');
+
+    if (currentFolder === 'all') {
+      folderNameEl.textContent = 'All Videos';
+      folderCountEl.textContent = `${allVideos.length} videos`;
+    } else {
+      const folderVideos = allVideos.filter(v => (v.folder_path || 'Default') === currentFolder);
+      folderNameEl.textContent = currentFolder;
+      folderCountEl.textContent = `${folderVideos.length} videos`;
+    }
+  }
+
+  // Display videos based on current folder and view
+  function displayVideos() {
+    const container = document.getElementById('videosGrid');
+    const emptyState = document.getElementById('emptyState');
+    const loadingState = document.getElementById('loadingState');
+    const videoControls = document.getElementById('videoControls');
+    const videoCount = document.getElementById('videoCount');
+
+    loadingState.classList.add('hidden');
+
+    let videosToShow = allVideos;
+    if (currentFolder !== 'all') {
+      videosToShow = allVideos.filter(v => (v.folder_path || 'Default') === currentFolder);
+    }
+
+    if (videosToShow.length === 0) {
+      container.classList.add('hidden');
+      videoControls.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+    videoControls.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+
+    // Update video count
+    videoCount.textContent = `${videosToShow.length} video${videosToShow.length > 1 ? 's' : ''}`;
+
+    const videosHTML = videosToShow.map(video => {
+      const isSelected = selectedVideos.includes(video.id);
+      return `
+        <div class="video-card relative group cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}"
+             draggable="true"
+             data-video-id="${video.id}"
+             onclick="toggleVideoSelection('${video.id}', event)"
+             ondragstart="handleDragStart(event, '${video.id}')"
+             ondragend="handleDragEnd(event)">
+          <div class="relative bg-dark-800 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all duration-200">
+            <div class="aspect-video bg-dark-700 relative overflow-hidden">
+              <img src="${video.thumbnail_path || '/images/default-thumbnail.jpg'}"
+                   alt="${video.title}"
+                   class="w-full h-full object-cover"
+                   onerror="this.src='/images/default-thumbnail.jpg'">
+
+              <!-- Drag indicator -->
+              <div class="drag-indicator absolute inset-0 bg-primary/20 border-2 border-primary border-dashed rounded opacity-0 flex items-center justify-center">
+                <i class="ti ti-drag-drop text-primary text-2xl"></i>
+              </div>
+
+              <!-- Duration badge -->
+              <span class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                ${formatDuration(video.duration)}
+              </span>
+
+              <!-- Selection checkbox -->
+              <div class="absolute top-2 left-2">
+                <div class="w-5 h-5 rounded border-2 border-white bg-black/50 flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : ''}">
+                  ${isSelected ? '<i class="ti ti-check text-xs text-white"></i>' : ''}
+                </div>
+              </div>
+
+              <!-- Quick actions -->
+              <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onclick="playVideo('${video.id}', event)"
+                  class="p-1.5 bg-black/70 text-white rounded-full hover:bg-primary/80 transition-colors mr-1">
+                  <i class="ti ti-play text-sm"></i>
+                </button>
+                <button onclick="showVideoOptions('${video.id}', event)"
+                  class="p-1.5 bg-black/70 text-white rounded-full hover:bg-gray-600 transition-colors">
+                  <i class="ti ti-dots-vertical text-sm"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="p-3">
+              <h3 class="font-medium text-white text-sm truncate mb-1">${video.title}</h3>
+              <div class="flex items-center justify-between text-xs text-gray-400">
+                <span>${formatFileSize(video.file_size)}</span>
+                <span>${new Date(video.upload_date || video.created_at).toLocaleDateString()}</span>
+              </div>
+              <div class="flex items-center text-xs text-gray-500 mt-1">
+                <i class="ti ti-folder mr-1"></i>
+                <span>${video.folder_path || 'Default'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = videosHTML;
+    updateFolderHeader();
+  }
+
+  // Toggle video selection
+  function toggleVideoSelection(videoId, event) {
+    event.stopPropagation();
+
+    const index = selectedVideos.indexOf(videoId);
+    if (index > -1) {
+      selectedVideos.splice(index, 1);
+    } else {
+      selectedVideos.push(videoId);
+    }
+
+    displayVideos(); // Refresh to update selection state
+    updateSelectionUI();
+  }
+
+  // Update selection UI
+  function updateSelectionUI() {
+    const selectAllCheckbox = document.getElementById('selectAllVideos');
+    const bulkMoveBtn = document.getElementById('bulkMoveBtn');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+
+    const videosToShow = currentFolder === 'all' ?
+      allVideos :
+      allVideos.filter(v => (v.folder_path || 'Default') === currentFolder);
+
+    // Update select all checkbox state
+    if (selectedVideos.length === 0) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+    } else if (selectedVideos.length === videosToShow.length) {
+      selectAllCheckbox.checked = true;
+      selectAllCheckbox.indeterminate = false;
+    } else {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = true;
+    }
+
+    // Show/hide bulk action buttons in header
+    if (selectedVideos.length > 0) {
+      bulkMoveBtn.classList.remove('hidden');
+      bulkDeleteBtn.classList.remove('hidden');
+    } else {
+      bulkMoveBtn.classList.add('hidden');
+      bulkDeleteBtn.classList.add('hidden');
+    }
+
+    // Add floating action bar for selected videos (alternative)
+    const existingBar = document.getElementById('selectionActionBar');
+    if (existingBar) {
+      existingBar.remove();
+    }
+
+    if (selectedVideos.length > 0) {
+      const actionBar = document.createElement('div');
+      actionBar.id = 'selectionActionBar';
+      actionBar.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-primary text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-4 z-40';
+      actionBar.innerHTML = `
+        <span>${selectedVideos.length} video${selectedVideos.length > 1 ? 's' : ''} selected</span>
+        <button onclick="showMoveVideosModal()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors">
+          <i class="ti ti-folder-open mr-1"></i>
+          Move
+        </button>
+        <button onclick="deleteSelectedVideos()" class="bg-red-500/80 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors">
+          <i class="ti ti-trash mr-1"></i>
+          Delete All
+        </button>
+        <button onclick="clearSelection()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors">
+          <i class="ti ti-x mr-1"></i>
+          Clear
+        </button>
+      `;
+      document.body.appendChild(actionBar);
+    }
+  }
+
+  // Clear video selection
+  function clearSelection() {
+    selectedVideos = [];
+    displayVideos();
+    updateSelectionUI();
+  }
+
+  // Format duration helper
+  function formatDuration(duration) {
+    if (!duration) return '0:00';
+    const minutes = Math.floor(duration / 60);
+    const seconds = Math.floor(duration % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  // Format file size helper
+  function formatFileSize(bytes) {
+    if (!bytes) return 'Unknown';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  }
+
+  // Show create folder modal
+  function showCreateFolderModal() {
+    document.getElementById('createFolderModal').classList.remove('hidden');
+    document.getElementById('newFolderName').focus();
+  }
+
+  // Close create folder modal
+  function closeCreateFolderModal() {
+    document.getElementById('createFolderModal').classList.add('hidden');
+    document.getElementById('newFolderName').value = '';
+  }
+
+  // Create new folder
+  async function createFolder() {
+    const folderName = document.getElementById('newFolderName').value.trim();
+
+    if (!folderName) {
+      showToast('error', 'Please enter a folder name');
+      return;
+    }
+
+    if (allFolders.includes(folderName)) {
+      showToast('error', 'Folder already exists');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/videos/folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folderName })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('success', 'Folder created successfully');
+        closeCreateFolderModal();
+        loadFolders();
+      } else {
+        showToast('error', result.error || 'Failed to create folder');
+      }
+    } catch (error) {
+      showToast('error', 'An error occurred while creating the folder');
+    }
+  }
+
+  // Show move videos modal
+  function showMoveVideosModal() {
+    if (selectedVideos.length === 0) return;
+
+    const modal = document.getElementById('moveVideosModal');
+    const destinationSelect = document.getElementById('destinationFolder');
+    const selectedList = document.getElementById('selectedVideosList');
+
+    // Populate destination folders
+    destinationSelect.innerHTML = '<option value="">Select folder...</option>';
+    allFolders.forEach(folder => {
+      destinationSelect.innerHTML += `<option value="${folder}">${folder}</option>`;
+    });
+
+    // Show selected videos
+    const selectedVideoDetails = selectedVideos.map(id => {
+      const video = allVideos.find(v => v.id === id);
+      return `<div class="text-xs py-1">${video ? video.title : 'Unknown video'}</div>`;
+    }).join('');
+    selectedList.innerHTML = selectedVideoDetails;
+
+    modal.classList.remove('hidden');
+  }
+
+  // Close move videos modal
+  function closeMoveVideosModal() {
+    document.getElementById('moveVideosModal').classList.add('hidden');
+  }
+
+  // Move selected videos
+  async function moveSelectedVideos() {
+    const destinationFolder = document.getElementById('destinationFolder').value;
+
+    if (!destinationFolder) {
+      showToast('error', 'Please select a destination folder');
+      return;
+    }
+
+    try {
+      const movePromises = selectedVideos.map(videoId => {
+        return fetch(`/api/videos/${videoId}/move`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ folderPath: destinationFolder })
+        });
+      });
+
+      await Promise.all(movePromises);
+
+      showToast('success', `${selectedVideos.length} video(s) moved successfully`);
+      closeMoveVideosModal();
+      clearSelection();
+      loadVideos();
+
+    } catch (error) {
+      showToast('error', 'An error occurred while moving videos');
+    }
+  }
+
+  // Delete selected videos
+  async function deleteSelectedVideos() {
+    if (selectedVideos.length === 0) return;
+
+    const confirmMessage = `Are you sure you want to delete ${selectedVideos.length} video${selectedVideos.length > 1 ? 's' : ''}? This action cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      const deletePromises = selectedVideos.map(videoId => {
+        return fetch(`/api/videos/${videoId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }).then(response => {
+          if (!response.ok) {
+            throw new Error(`Failed to delete video ${videoId}`);
+          }
+          return response.json();
+        });
+      });
+
+      await Promise.all(deletePromises);
+
+      showToast('success', `${selectedVideos.length} video(s) deleted successfully`);
+      clearSelection();
+      loadVideos();
+
+    } catch (error) {
+      console.error('Error deleting videos:', error);
+      showToast('error', 'An error occurred while deleting videos');
+    }
+  }
+
+  // Show toast notification
+  function showToast(type, message) {
+    const toast = document.getElementById('toast');
+    const icon = document.getElementById('toastIcon');
+    const messageEl = document.getElementById('toastMessage');
+
+    // Set icon and color based on type
+    if (type === 'success') {
+      icon.innerHTML = '<i class="ti ti-check text-green-400"></i>';
+    } else if (type === 'error') {
+      icon.innerHTML = '<i class="ti ti-x text-red-400"></i>';
+    }
+
+    messageEl.textContent = message;
+    toast.classList.remove('hidden');
+
+    setTimeout(() => {
+      toast.classList.add('hidden');
+    }, 3000);
+  }
+
+  // Filter content based on search
+  function filterContent(searchTerm) {
+    // This will be implemented to filter both folders and videos
+    // For now, just filter videos
+    if (!searchTerm) {
+      displayVideos();
+      return;
+    }
+
+    // Filter logic here
+    displayVideos();
+  }
+
+  // Toggle view between grid and list
+  function toggleView() {
+    // Implementation for different view modes
+  }
+
+  // Placeholder functions for other features
+  function toggleSortMenu() {
+    // Implementation for sorting
+  }
+
+  function toggleFolderOptions() {
+    const menu = document.getElementById('folderOptionsMenu');
+    menu.classList.toggle('hidden');
+  }
+
+  function renameFolderDialog() {
+    if (currentFolder === 'all' || currentFolder === 'Default') {
+      showToast('error', 'Cannot rename this folder');
+      return;
+    }
+
+    const newName = prompt('Enter new folder name:', currentFolder);
+    if (newName && newName.trim() && newName.trim() !== currentFolder) {
+      renameFolder(currentFolder, newName.trim());
+    }
+  }
+
+  async function renameFolder(oldName, newName) {
+    try {
+      const response = await fetch(`/api/folders/${encodeURIComponent(oldName)}/rename`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ newName })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('success', 'Folder renamed successfully');
+        currentFolder = newName;
+        loadFolders();
+        loadVideos();
+      } else {
+        showToast('error', result.error || 'Failed to rename folder');
+      }
+    } catch (error) {
+      showToast('error', 'An error occurred while renaming the folder');
+    }
+  }
+
+  function deleteFolderDialog() {
+    if (currentFolder === 'all' || currentFolder === 'Default') {
+      showToast('error', 'Cannot delete this folder');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete the "${currentFolder}" folder? All videos will be moved to the Default folder.`)) {
+      deleteFolder(currentFolder);
+    }
+  }
+
+  async function deleteFolder(folderName) {
+    try {
+      const response = await fetch(`/api/folders/${encodeURIComponent(folderName)}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('success', 'Folder deleted successfully');
+        currentFolder = 'all';
+        loadFolders();
+        loadVideos();
+      } else {
+        showToast('error', result.error || 'Failed to delete folder');
+      }
+    } catch (error) {
+      showToast('error', 'An error occurred while deleting the folder');
+    }
+  }
+
+  function playVideo(videoId, event) {
+    event.stopPropagation();
+    // Find video and open in new tab or modal
+    const video = allVideos.find(v => v.id === videoId);
+    if (video) {
+      window.open(`/stream/${videoId}`, '_blank');
+    }
+  }
+
+  function showVideoOptions(videoId, event) {
+    event.stopPropagation();
+    // Create a context menu for video options
+    const video = allVideos.find(v => v.id === videoId);
+    if (!video) return;
+
+    // Remove existing menu
+    const existingMenu = document.getElementById('videoContextMenu');
+    if (existingMenu) {
+      existingMenu.remove();
+    }
+
+    // Create new menu
+    const menu = document.createElement('div');
+    menu.id = 'videoContextMenu';
+    menu.className = 'absolute z-50 bg-dark-700 rounded-lg border border-gray-600 shadow-lg py-1 min-w-48';
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+
+    menu.innerHTML = `
+      <button onclick="playVideo('${videoId}', event)" class="w-full text-left px-4 py-2 hover:bg-dark-600 flex items-center">
+        <i class="ti ti-play mr-2"></i>
+        Play Video
+      </button>
+      <button onclick="selectSingleVideo('${videoId}')" class="w-full text-left px-4 py-2 hover:bg-dark-600 flex items-center">
+        <i class="ti ti-folder-open mr-2"></i>
+        Move to Folder
+      </button>
+      <button onclick="downloadVideo('${videoId}')" class="w-full text-left px-4 py-2 hover:bg-dark-600 flex items-center">
+        <i class="ti ti-download mr-2"></i>
+        Download
+      </button>
+      <button onclick="deleteVideoDialog('${videoId}')" class="w-full text-left px-4 py-2 hover:bg-dark-600 text-red-400 flex items-center">
+        <i class="ti ti-trash mr-2"></i>
+        Delete Video
+      </button>
+    `;
+
+    document.body.appendChild(menu);
+
+    // Close menu when clicking outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu() {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      });
+    }, 10);
+  }
+
+  function selectSingleVideo(videoId) {
+    selectedVideos = [videoId];
+    showMoveVideosModal();
+  }
+
+  function downloadVideo(videoId) {
+    const video = allVideos.find(v => v.id === videoId);
+    if (video) {
+      const link = document.createElement('a');
+      link.href = video.filepath;
+      link.download = video.title;
+      link.click();
+    }
+  }
+
+  function deleteVideoDialog(videoId) {
+    const video = allVideos.find(v => v.id === videoId);
+    if (video && confirm(`Are you sure you want to delete "${video.title}"? This action cannot be undone.`)) {
+      deleteVideo(videoId);
+    }
+  }
+
+  async function deleteVideo(videoId) {
+    try {
+      const response = await fetch(`/api/videos/${videoId}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('success', 'Video deleted successfully');
+        loadVideos();
+      } else {
+        showToast('error', result.error || 'Failed to delete video');
+      }
+    } catch (error) {
+      showToast('error', 'An error occurred while deleting the video');
+    }
+  }
+
+  // Drag and Drop functionality
+  let draggedVideoId = null;
+
+  function handleDragStart(event, videoId) {
+    draggedVideoId = videoId;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/html', event.target.outerHTML);
+
+    // Add visual feedback
+    event.target.style.opacity = '0.5';
+    const dragIndicator = event.target.querySelector('.drag-indicator');
+    if (dragIndicator) {
+      dragIndicator.style.opacity = '1';
+    }
+  }
+
+  function handleDragEnd(event) {
+    // Reset visual feedback
+    event.target.style.opacity = '1';
+    const dragIndicator = event.target.querySelector('.drag-indicator');
+    if (dragIndicator) {
+      dragIndicator.style.opacity = '0';
+    }
+
+    // Reset all folder highlights
+    document.querySelectorAll('.folder-item').forEach(folder => {
+      folder.classList.remove('drag-over');
+    });
+
+    draggedVideoId = null;
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDragEnter(event) {
+    event.preventDefault();
+    event.currentTarget.classList.add('drag-over');
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    // Only remove highlight if we're leaving the element entirely
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      event.currentTarget.classList.remove('drag-over');
+    }
+  }
+
+  async function handleDrop(event, targetFolder) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drag-over');
+
+    if (!draggedVideoId || !targetFolder) return;
+
+    // Find the video being dragged
+    const video = allVideos.find(v => v.id === draggedVideoId);
+    if (!video) return;
+
+    // Don't do anything if dropping on the same folder
+    if ((video.folder_path || 'Default') === targetFolder) {
+      showToast('info', 'Video is already in this folder');
+      return;
+    }
+
+    // Move the video
+    try {
+      const response = await fetch(`/api/videos/${draggedVideoId}/move`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folderPath: targetFolder })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showToast('success', `Video moved to "${targetFolder}" folder`);
+        loadVideos(); // Refresh the video display
+      } else {
+        showToast('error', result.error || 'Failed to move video');
+      }
+    } catch (error) {
+      showToast('error', 'An error occurred while moving the video');
+    }
+  }
+
+  // Initialize select all functionality
+  document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAllVideos');
+    const bulkMoveBtn = document.getElementById('bulkMoveBtn');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+
+    // Select all checkbox handler
+    selectAllCheckbox.addEventListener('change', function() {
+      const videosToShow = currentFolder === 'all' ?
+        allVideos :
+        allVideos.filter(v => (v.folder_path || 'Default') === currentFolder);
+
+      if (this.checked) {
+        // Select all videos in current view
+        selectedVideos = videosToShow.map(v => v.id);
+      } else {
+        // Deselect all
+        selectedVideos = [];
+      }
+
+      displayVideos(); // Refresh display to show selections
+      updateSelectionUI();
+    });
+
+    // Bulk move button handler
+    bulkMoveBtn.addEventListener('click', function() {
+      if (selectedVideos.length > 0) {
+        showMoveVideosModal();
+      }
+    });
+
+    // Bulk delete button handler
+    bulkDeleteBtn.addEventListener('click', function() {
+      if (selectedVideos.length > 0) {
+        deleteSelectedVideos();
+      }
+    });
+  });
+</script>
+
+<style>
+.video-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.video-card:hover {
+  transform: translateY(-2px);
+}
+
+.video-card[draggable="true"]:hover {
+  cursor: grab;
+}
+
+.video-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.drag-indicator {
+  transition: opacity 0.2s ease;
+}
+
+.folder-item {
+  transition: all 0.2s ease;
+}
+
+.folder-item.drag-over {
+  background-color: rgba(0, 85, 255, 0.2) !important;
+  border: 2px dashed #0055FF;
+  transform: scale(1.02);
+}
+
+#selectionActionBar {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translate(-50%, 100%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.video-card.ring-2 {
+  box-shadow: 0 0 0 2px #0055FF;
+}
+
+/* Toast notification styles */
+#toast {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Context menu styles */
+#videoContextMenu {
+  animation: scaleIn 0.15s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Folder options menu positioning */
+#currentFolderHeader {
+  position: relative;
+}
+
+#folderOptionsMenu {
+  transform-origin: top right;
+  animation: scaleIn 0.15s ease-out;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .video-card {
+    transform: none !important;
+  }
+
+  .video-card:hover {
+    transform: none !important;
+  }
+
+  #mainContent {
+    grid-template-columns: 1fr;
+  }
+
+  .lg\:col-span-1,
+  .lg\:col-span-3 {
+    grid-column: span 1;
+  }
+}
+
+/* Scrollbar styling for folder list */
+#foldersList {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+
+#foldersList::-webkit-scrollbar {
+  width: 4px;
+}
+
+#foldersList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#foldersList::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 20px;
+}
+</style>

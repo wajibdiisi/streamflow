@@ -74,6 +74,12 @@
               <h3 class="font-medium truncate mb-0.5">
                 <%= video.title %>
               </h3>
+              <div class="flex items-center justify-between mb-1">
+                <div class="text-xs text-gray-500 flex items-center">
+                  <i class="ti ti-folder text-gray-500 mr-1"></i>
+                  <span><%= video.folder_path || 'Default' %></span>
+                </div>
+              </div>
               <div class="flex items-center justify-between">
                 <div class="text-xs text-gray-400 flex items-center">
                   <span>
@@ -88,6 +94,10 @@
 
                 <div class="flex">
                   <button class="text-gray-400 hover:text-white p-1"
+                    onclick="showMoveDialog('<%= video.id %>', '<%= video.title %>', '<%= video.folder_path || "Default" %>')">
+                    <i class="ti ti-folder text-sm"></i>
+                  </button>
+                  <button class="text-gray-400 hover:text-white p-1 ml-1"
                     onclick="showRenameDialog('<%= video.id %>', '<%= video.title %>')">
                     <i class="ti ti-pencil text-sm"></i>
                   </button>
@@ -186,6 +196,30 @@
                       <p id="selectedFileSize" class="text-xs text-gray-400 mt-1"></p>
                     </div>
                     <button type="button" id="clearFileButton" class="text-gray-400 hover:text-white ml-2 shrink-0">
+                      <i class="ti ti-x"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4" id="upload-folder-section">
+                <label class="block text-sm font-medium mb-2">Organize into folder (optional)</label>
+                <div class="flex gap-2">
+                  <select id="upload-folder-select" class="flex-1 bg-dark-700 text-white px-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary">
+                    <!-- Options will be loaded dynamically -->
+                  </select>
+                  <button type="button" id="upload-new-folder-btn" class="px-3 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg border border-gray-600 transition-colors" title="Create new folder">
+                    <i class="ti ti-folder-plus"></i>
+                  </button>
+                </div>
+                <div id="upload-new-folder-row" class="mt-2 hidden">
+                  <div class="flex gap-2">
+                    <input type="text" id="upload-new-folder-input" class="flex-1 bg-dark-700 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border border-gray-600" placeholder="Enter new folder name...">
+                    <button type="button" id="upload-save-folder-btn" class="px-3 py-2.5 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center">
+                      <i class="ti ti-check mr-1"></i>
+                      <span>Save</span>
+                    </button>
+                    <button type="button" id="upload-cancel-folder-btn" class="px-3 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors" title="Cancel">
                       <i class="ti ti-x"></i>
                     </button>
                   </div>
@@ -330,6 +364,7 @@
         }, 10);
         document.body.classList.add('overflow-hidden');
         resetUploadForm();
+        loadUploadFolders();
       }
       function closeUploadModal() {
         const modal = document.getElementById('uploadModal');
@@ -395,38 +430,147 @@
           if (data.hasApiKey) {
             modalContent.innerHTML = `
         <div class="p-6">
-          
+
           <div class="text-center mb-5">
             <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
               <i class="ti ti-brand-google-drive text-3xl text-primary"></i>
             </div>
             <h4 class="text-lg font-medium mb-1">Import from Google Drive</h4>
-            <p class="text-gray-400 text-sm">Enter a Google Drive link to your video</p>
+            <p class="text-gray-400 text-sm">Enter a Google Drive link to your video or folder</p>
           </div>
-          
+
           <div class="relative mb-2">
-            <input 
-              type="text" 
-              id="gdrive-link" 
+            <input
+              type="text"
+              id="gdrive-link"
               class="bg-dark-700 text-white pl-10 pr-4 py-2.5 rounded-lg block w-full focus:outline-none focus:ring-1 focus:ring-primary border border-gray-600"
-              placeholder="https://drive.google.com/file/d/..."
+              placeholder="https://drive.google.com/file/d/... or https://drive.google.com/drive/folders/..."
             >
             <i class="ti ti-link absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           </div>
-          <p class="text-xs text-gray-500 mb-4">Make sure the file is shared with <strong>Anyone with the link</strong></p>
-          
+          <p class="text-xs text-gray-500 mb-4">Make sure the file/folder is shared with <strong>Anyone with the link</strong></p>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Organize into folder (optional)</label>
+            <div class="flex gap-2">
+              <select id="folder-select" class="flex-1 bg-dark-700 text-white px-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary">
+                <!-- Options will be loaded dynamically -->
+              </select>
+              <button type="button" id="new-folder-btn" class="px-3 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg border border-gray-600 transition-colors" title="Create new folder">
+                <i class="ti ti-folder-plus"></i>
+              </button>
+            </div>
+            <div id="new-folder-row" class="mt-2 hidden">
+              <div class="flex gap-2">
+                <input type="text" id="new-folder-input" class="flex-1 bg-dark-700 text-white px-3 py-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary border border-gray-600" placeholder="Enter new folder name...">
+                <button type="button" id="save-folder-btn" class="px-3 py-2.5 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center">
+                  <i class="ti ti-check mr-1"></i>
+                  <span>Save</span>
+                </button>
+                <button type="button" id="cancel-folder-btn" class="px-3 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors" title="Cancel">
+                  <i class="ti ti-x"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <button id="import-drive-button" class="w-full bg-primary hover:bg-primary/90 text-white py-2.5 px-4 rounded-lg font-medium transition-colors flex items-center justify-center">
             <i class="ti ti-download mr-2"></i>
-            <span>Import Video</span>
+            <span>Import Video/Folder</span>
           </button>
         </div>
       `;
+            // Load available folders
+            loadFolders();
+
+            // Handle new folder creation
+            document.getElementById('new-folder-btn').addEventListener('click', function() {
+              const newFolderRow = document.getElementById('new-folder-row');
+              const newFolderInput = document.getElementById('new-folder-input');
+
+              newFolderRow.classList.remove('hidden');
+              newFolderInput.focus();
+            });
+
+            // Handle save folder button
+            document.getElementById('save-folder-btn').addEventListener('click', async function() {
+              const folderName = document.getElementById('new-folder-input').value.trim();
+              if (!folderName) {
+                showToast('error', 'Please enter a folder name');
+                return;
+              }
+
+              // Save folder to backend
+              this.disabled = true;
+              this.innerHTML = `<svg class="animate-spin -ml-1 mr-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>Saving...`;
+
+              try {
+                const response = await fetch('/api/videos/folders', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': document.querySelector('input[name="_csrf"]').value
+                  },
+                  body: JSON.stringify({ folderName })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                  // Add to select dropdown
+                  const folderSelect = document.getElementById('folder-select');
+                  const option = new Option(folderName, folderName);
+                  folderSelect.add(option);
+                  folderSelect.value = folderName;
+
+                  // Hide input row
+                  document.getElementById('new-folder-row').classList.add('hidden');
+                  document.getElementById('new-folder-input').value = '';
+
+                  showToast('success', 'Folder created successfully');
+                } else {
+                  showToast('error', result.error || 'Failed to create folder');
+                }
+              } catch (error) {
+                showToast('error', 'Error creating folder');
+              } finally {
+                this.disabled = false;
+                this.innerHTML = `<i class="ti ti-check mr-1"></i><span>Save</span>`;
+              }
+            });
+
+            // Handle cancel folder button
+            document.getElementById('cancel-folder-btn').addEventListener('click', function() {
+              document.getElementById('new-folder-row').classList.add('hidden');
+              document.getElementById('new-folder-input').value = '';
+            });
+
+            // Handle enter key in new folder input
+            document.getElementById('new-folder-input').addEventListener('keydown', function(e) {
+              if (e.key === 'Enter') {
+                document.getElementById('save-folder-btn').click();
+              } else if (e.key === 'Escape') {
+                document.getElementById('cancel-folder-btn').click();
+              }
+            });
+
             document.getElementById('import-drive-button').addEventListener('click', async function () {
               const link = document.getElementById('gdrive-link').value;
               if (!link) {
                 showToast('error', 'Please enter a Google Drive link');
                 return;
               }
+
+              const folderSelect = document.getElementById('folder-select');
+              let folderPath = folderSelect.value;
+
+              // Set default if no folder selected
+              if (!folderPath) {
+                folderPath = 'Default';
+              }
+
               this.disabled = true;
               this.innerHTML = `
           <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -436,27 +580,33 @@
           Processing...
         `;
               try {
+                const requestBody = { driveUrl: link };
+                // Always send folderPath, even if it's Default
+                requestBody.folderPath = folderPath;
+
                 const response = await fetch('/api/videos/import-drive', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': document.querySelector('input[name="_csrf"]').value
                   },
-                  body: JSON.stringify({ driveUrl: link })
+                  body: JSON.stringify(requestBody)
                 });
                 const result = await response.json();
                 if (result.success) {
+                  const importType = result.isFolder ? 'folder' : 'video';
+                  showToast('success', `${importType.charAt(0).toUpperCase() + importType.slice(1)} import started`);
                   showImportProgressModal(result.jobId);
                   closeGDriveModal();
                 } else {
-                  showToast('error', result.error || 'Failed to import video');
+                  showToast('error', result.error || 'Failed to import');
                   this.disabled = false;
-                  this.innerHTML = `<i class="ti ti-download mr-2"></i><span>Import Video</span>`;
+                  this.innerHTML = `<i class="ti ti-download mr-2"></i><span>Import Video/Folder</span>`;
                 }
               } catch (error) {
-                showToast('error', 'An error occurred while importing the video');
+                showToast('error', 'An error occurred while importing');
                 this.disabled = false;
-                this.innerHTML = `<i class="ti ti-download mr-2"></i><span>Import Video</span>`;
+                this.innerHTML = `<i class="ti ti-download mr-2"></i><span>Import Video/Folder</span>`;
               }
             });
           } else {
@@ -719,9 +869,21 @@
           if (videoFileInput.files.length === 0) {
             return;
           }
+
           const file = videoFileInput.files[0];
+          const folderSelect = document.getElementById('upload-folder-select');
+          let folderPath = folderSelect.value;
+
+          // Set default if no folder selected
+          if (!folderPath) {
+            folderPath = 'Default';
+          }
+
           const formData = new FormData();
           formData.append('video', file);
+          // Always send folderPath
+          formData.append('folderPath', folderPath);
+
           uploadDropzone.classList.add('hidden');
           selectedFileInfo.classList.add('hidden');
           uploadProgress.classList.remove('hidden');
@@ -960,6 +1122,159 @@
         }
         return true;
       }
+      async function showDeleteDialog(videoId, videoTitle) {
+        const result = await createModalDialog({
+          type: 'danger',
+          icon: 'ti-alert-triangle',
+          title: 'Delete Video',
+          message: `Are you sure you want to delete "${videoTitle}"? This action cannot be undone.`,
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          confirmClass: 'bg-red-500 hover:bg-red-600'
+        });
+        if (result.confirmed) {
+          try {
+            const response = await fetch(`/api/videos/${videoId}`, {
+              method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) {
+              showToast('success', 'Video deleted successfully');
+              setTimeout(() => window.location.reload(), 1000);
+            } else {
+              showToast('error', data.error || 'Failed to delete video');
+            }
+          } catch (error) {
+            showToast('error', 'An error occurred while deleting the video');
+          }
+        }
+      }
+
+      async function showMoveDialog(videoId, videoTitle, currentFolder) {
+        // Load folders first
+        const response = await fetch('/api/videos/folders');
+        const data = await response.json();
+        const folders = data.success ? data.folders : ['Default'];
+
+        // Create folder options HTML
+        let folderOptionsHTML = folders.map(folder =>
+          `<option value="${folder}" ${folder === currentFolder ? 'selected' : ''}>${folder}</option>`
+        ).join('');
+
+        const dialog = document.createElement('div');
+        dialog.id = 'move-video-modal';
+        dialog.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300';
+
+        dialog.innerHTML = `
+          <div class="transform transition-all duration-300 opacity-0 scale-95 modal-content max-w-md w-full mx-4">
+            <div class="bg-dark-800 rounded-lg shadow-xl border border-gray-600/50 overflow-hidden">
+              <div class="px-6 py-5 flex items-center">
+                <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mr-4 shrink-0">
+                  <i class="ti ti-folder text-primary text-2xl"></i>
+                </div>
+                <div class="flex-1">
+                  <h3 class="text-lg font-medium text-white">Move Video</h3>
+                  <p class="text-gray-400 text-sm mt-1">Choose a folder for "${videoTitle}"</p>
+                </div>
+              </div>
+
+              <div class="px-6 pb-4">
+                <div class="mb-3">
+                  <label class="block text-sm font-medium mb-2">Select Folder</label>
+                  <select id="move-folder-select" class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary">
+                    ${folderOptionsHTML}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-2">Or Create New Folder</label>
+                  <input
+                    type="text"
+                    id="move-new-folder"
+                    class="w-full bg-dark-700 text-white px-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Enter new folder name..."
+                  >
+                </div>
+              </div>
+
+              <div class="px-6 py-4 flex justify-end space-x-3 border-t border-gray-600/50">
+                <button id="modal-cancel-btn" class="px-4 py-2.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition-colors text-sm font-medium flex items-center">
+                  <i class="ti ti-x mr-1.5"></i>
+                  Cancel
+                </button>
+                <button id="modal-confirm-btn" class="bg-primary hover:bg-blue-600 px-4 py-2.5 text-white rounded-lg transition-colors text-sm font-medium flex items-center">
+                  <i class="ti ti-folder mr-1.5"></i>
+                  Move
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(dialog);
+        document.body.classList.add('overflow-hidden');
+
+        setTimeout(() => {
+          const modalContent = dialog.querySelector('.modal-content');
+          if (modalContent) {
+            modalContent.classList.replace('opacity-0', 'opacity-100');
+            modalContent.classList.replace('scale-95', 'scale-100');
+          }
+        }, 10);
+
+        const closeModal = () => {
+          const modalContent = dialog.querySelector('.modal-content');
+          if (modalContent) {
+            modalContent.classList.replace('opacity-100', 'opacity-0');
+            modalContent.classList.replace('scale-100', 'scale-95');
+          }
+          setTimeout(() => {
+            document.body.classList.remove('overflow-hidden');
+            dialog.remove();
+          }, 200);
+        };
+
+        document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', async () => {
+          const folderSelect = document.getElementById('move-folder-select');
+          const newFolderInput = document.getElementById('move-new-folder');
+          let folderPath = newFolderInput.value.trim() || folderSelect.value;
+
+          if (!folderPath) {
+            showToast('error', 'Please select or enter a folder name');
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/videos/${videoId}/move`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('input[name="_csrf"]').value
+              },
+              body: JSON.stringify({ folderPath })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+              showToast('success', 'Video moved successfully');
+              closeModal();
+              setTimeout(() => window.location.reload(), 1000);
+            } else {
+              showToast('error', result.error || 'Failed to move video');
+            }
+          } catch (error) {
+            showToast('error', 'An error occurred while moving the video');
+          }
+        });
+
+        dialog.addEventListener('click', function (e) {
+          if (e.target === dialog) {
+            closeModal();
+          }
+        });
+      }
+
       async function showDeleteDialog(videoId, videoTitle) {
         const result = await createModalDialog({
           type: 'danger',
@@ -1349,6 +1664,147 @@
               paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalVideos} videos`;
             }
           }
+        }
+      });
+
+      async function loadFolders() {
+        try {
+          const response = await fetch('/api/videos/folders');
+          const data = await response.json();
+          if (data.success) {
+            const folderSelect = document.getElementById('folder-select');
+            if (folderSelect) {
+              // Clear all existing options
+              folderSelect.innerHTML = '';
+
+              // Add placeholder option
+              const placeholderOption = new Option('Select existing folder...', '');
+              folderSelect.add(placeholderOption);
+
+              // Add all folders including Default
+              data.folders.forEach(folder => {
+                const option = new Option(folder, folder);
+                folderSelect.add(option);
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading folders:', error);
+        }
+      }
+
+      async function loadUploadFolders() {
+        try {
+          const response = await fetch('/api/videos/folders');
+          const data = await response.json();
+          if (data.success) {
+            const folderSelect = document.getElementById('upload-folder-select');
+            if (folderSelect) {
+              // Clear all existing options
+              folderSelect.innerHTML = '';
+
+              // Add placeholder option
+              const placeholderOption = new Option('Select existing folder...', '');
+              folderSelect.add(placeholderOption);
+
+              // Add all folders including Default
+              data.folders.forEach(folder => {
+                const option = new Option(folder, folder);
+                folderSelect.add(option);
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading upload folders:', error);
+        }
+      }
+
+      // Initialize upload folder handlers
+      document.addEventListener('DOMContentLoaded', function () {
+        // Upload modal folder creation
+        const uploadNewFolderBtn = document.getElementById('upload-new-folder-btn');
+        const uploadNewFolderInput = document.getElementById('upload-new-folder-input');
+        const uploadFolderSelect = document.getElementById('upload-folder-select');
+
+        if (uploadNewFolderBtn) {
+          uploadNewFolderBtn.addEventListener('click', function() {
+            const uploadNewFolderRow = document.getElementById('upload-new-folder-row');
+            const uploadNewFolderInput = document.getElementById('upload-new-folder-input');
+
+            uploadNewFolderRow.classList.remove('hidden');
+            uploadNewFolderInput.focus();
+          });
+        }
+
+        // Upload modal save folder button
+        const uploadSaveFolderBtn = document.getElementById('upload-save-folder-btn');
+        const uploadCancelFolderBtn = document.getElementById('upload-cancel-folder-btn');
+
+        if (uploadSaveFolderBtn) {
+          uploadSaveFolderBtn.addEventListener('click', async function() {
+            const folderName = uploadNewFolderInput.value.trim();
+            if (!folderName) {
+              showToast('error', 'Please enter a folder name');
+              return;
+            }
+
+            // Save folder to backend
+            this.disabled = true;
+            this.innerHTML = `<svg class="animate-spin -ml-1 mr-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>Saving...`;
+
+            try {
+              const response = await fetch('/api/videos/folders', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': document.querySelector('input[name="_csrf"]').value
+                },
+                body: JSON.stringify({ folderName })
+              });
+
+              const result = await response.json();
+              if (result.success) {
+                // Add to select dropdown
+                const option = new Option(folderName, folderName);
+                uploadFolderSelect.add(option);
+                uploadFolderSelect.value = folderName;
+
+                // Hide input row
+                document.getElementById('upload-new-folder-row').classList.add('hidden');
+                uploadNewFolderInput.value = '';
+
+                showToast('success', 'Folder created successfully');
+              } else {
+                showToast('error', result.error || 'Failed to create folder');
+              }
+            } catch (error) {
+              showToast('error', 'Error creating folder');
+            } finally {
+              this.disabled = false;
+              this.innerHTML = `<i class="ti ti-check mr-1"></i><span>Save</span>`;
+            }
+          });
+        }
+
+        if (uploadCancelFolderBtn) {
+          uploadCancelFolderBtn.addEventListener('click', function() {
+            document.getElementById('upload-new-folder-row').classList.add('hidden');
+            uploadNewFolderInput.value = '';
+          });
+        }
+
+        if (uploadNewFolderInput) {
+          uploadNewFolderInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+              uploadNewFolderBtn.click();
+            } else if (e.key === 'Escape') {
+              this.value = '';
+              this.classList.add('hidden');
+            }
+          });
         }
       });
     </script>

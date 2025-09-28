@@ -1,0 +1,646 @@
+2025-09-28T09:13:20.046Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:13:20.639Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:13:20.665Z [LOG] StreamFlow running at:
+2025-09-28T09:13:20.665Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:13:20.666Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:13:20.666Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:13:20.675Z [LOG] Stream scheduler initialized
+2025-09-28T09:13:20.675Z [LOG] Checking for scheduled streams (2025-09-28T09:13:20.675Z to 2025-09-28T09:14:20.675Z)
+2025-09-28T09:13:20.677Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:13:20.679Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:30:39.086Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:30:39.337Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:30:39.353Z [LOG] StreamFlow running at:
+2025-09-28T09:30:39.354Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:30:39.354Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:30:39.354Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:30:39.360Z [LOG] Stream scheduler initialized
+2025-09-28T09:30:39.361Z [LOG] Checking for scheduled streams (2025-09-28T09:30:39.360Z to 2025-09-28T09:31:39.360Z)
+2025-09-28T09:30:39.362Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:30:39.362Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:30:50.521Z [LOG] User created successfully with ID: c6d03e00-7ccf-4a96-b860-eed88f71347b
+2025-09-28T09:31:18.695Z [ERROR] Error checking Google Drive API status: TypeError: Cannot read properties of undefined (reading 'gdrive_api_key')
+    at F:\livestream\streamflow\app.js:1055:25
+2025-09-28T09:31:39.372Z [LOG] Checking for scheduled streams (2025-09-28T09:31:39.372Z to 2025-09-28T09:32:39.372Z)
+2025-09-28T09:32:39.344Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:32:39.344Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:32:39.375Z [LOG] Checking for scheduled streams (2025-09-28T09:32:39.375Z to 2025-09-28T09:33:39.375Z)
+2025-09-28T09:32:45.268Z [ERROR] Error downloading file from Google Drive: GaxiosError: File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.
+    at Gaxios._request (F:\livestream\streamflow\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async downloadFile (F:\livestream\streamflow\utils\googleDriveService.js:85:26)
+    at async processGoogleDriveImport (F:\livestream\streamflow\app.js:1175:20) {
+  config: {
+    url: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs',
+    method: 'GET',
+    apiVersion: '',
+    userAgentDirectives: [
+      {
+        product: 'google-api-nodejs-client',
+        version: '7.2.0',
+        comment: 'gzip'
+      }
+    ],
+    paramsSerializer: [Function (anonymous)],
+    headers: {
+      'x-goog-api-client': 'gdcl/7.2.0 gl-node/22.15.0',
+      'Accept-Encoding': 'gzip',
+      'User-Agent': 'google-api-nodejs-client/7.2.0 (gzip)'
+    },
+    params: {
+      fields: 'name,mimeType,size',
+      key: 'AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+    },
+    validateStatus: [Function (anonymous)],
+    retry: true,
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor],
+    retryConfig: {
+      currentRetryAttempt: 0,
+      retry: 3,
+      httpMethodsToRetry: [ 'GET', 'HEAD', 'PUT', 'OPTIONS', 'DELETE' ],
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1759051965267,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [ [ 100, 199 ], [ 408, 408 ], [ 429, 429 ], [ 500, 599 ] ]
+    }
+  },
+  response: {
+    config: {
+      url: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs',
+      method: 'GET',
+      apiVersion: '',
+      userAgentDirectives: [
+        {
+          product: 'google-api-nodejs-client',
+          version: '7.2.0',
+          comment: 'gzip'
+        }
+      ],
+      paramsSerializer: [Function (anonymous)],
+      headers: {
+        'x-goog-api-client': 'gdcl/7.2.0 gl-node/22.15.0',
+        'Accept-Encoding': 'gzip',
+        'User-Agent': 'google-api-nodejs-client/7.2.0 (gzip)'
+      },
+      params: {
+        fields: 'name,mimeType,size',
+        key: 'AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+      },
+      validateStatus: [Function (anonymous)],
+      retry: true,
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: {
+        code: 404,
+        message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+        errors: [
+          {
+            message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+            domain: 'global',
+            reason: 'notFound',
+            location: 'fileId',
+            locationType: 'parameter'
+          }
+        ]
+      }
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'private, max-age=0',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=UTF-8',
+      date: 'Sun, 28 Sep 2025 09:32:45 GMT',
+      expires: 'Sun, 28 Sep 2025 09:32:45 GMT',
+      server: 'ESF',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 404,
+    statusText: 'Not Found',
+    request: {
+      responseURL: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+    }
+  },
+  error: undefined,
+  status: 404,
+  code: 404,
+  errors: [
+    {
+      message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+      domain: 'global',
+      reason: 'notFound',
+      location: 'fileId',
+      locationType: 'parameter'
+    }
+  ],
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+2025-09-28T09:32:45.269Z [ERROR] Error processing Google Drive import: GaxiosError: File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.
+    at Gaxios._request (F:\livestream\streamflow\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async downloadFile (F:\livestream\streamflow\utils\googleDriveService.js:85:26)
+    at async processGoogleDriveImport (F:\livestream\streamflow\app.js:1175:20) {
+  config: {
+    url: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs',
+    method: 'GET',
+    apiVersion: '',
+    userAgentDirectives: [
+      {
+        product: 'google-api-nodejs-client',
+        version: '7.2.0',
+        comment: 'gzip'
+      }
+    ],
+    paramsSerializer: [Function (anonymous)],
+    headers: {
+      'x-goog-api-client': 'gdcl/7.2.0 gl-node/22.15.0',
+      'Accept-Encoding': 'gzip',
+      'User-Agent': 'google-api-nodejs-client/7.2.0 (gzip)'
+    },
+    params: {
+      fields: 'name,mimeType,size',
+      key: 'AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+    },
+    validateStatus: [Function (anonymous)],
+    retry: true,
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor],
+    retryConfig: {
+      currentRetryAttempt: 0,
+      retry: 3,
+      httpMethodsToRetry: [ 'GET', 'HEAD', 'PUT', 'OPTIONS', 'DELETE' ],
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1759051965267,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [ [ 100, 199 ], [ 408, 408 ], [ 429, 429 ], [ 500, 599 ] ]
+    }
+  },
+  response: {
+    config: {
+      url: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs',
+      method: 'GET',
+      apiVersion: '',
+      userAgentDirectives: [
+        {
+          product: 'google-api-nodejs-client',
+          version: '7.2.0',
+          comment: 'gzip'
+        }
+      ],
+      paramsSerializer: [Function (anonymous)],
+      headers: {
+        'x-goog-api-client': 'gdcl/7.2.0 gl-node/22.15.0',
+        'Accept-Encoding': 'gzip',
+        'User-Agent': 'google-api-nodejs-client/7.2.0 (gzip)'
+      },
+      params: {
+        fields: 'name,mimeType,size',
+        key: 'AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+      },
+      validateStatus: [Function (anonymous)],
+      retry: true,
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: {
+        code: 404,
+        message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+        errors: [
+          {
+            message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+            domain: 'global',
+            reason: 'notFound',
+            location: 'fileId',
+            locationType: 'parameter'
+          }
+        ]
+      }
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'private, max-age=0',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=UTF-8',
+      date: 'Sun, 28 Sep 2025 09:32:45 GMT',
+      expires: 'Sun, 28 Sep 2025 09:32:45 GMT',
+      server: 'ESF',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 404,
+    statusText: 'Not Found',
+    request: {
+      responseURL: 'https://www.googleapis.com/drive/v3/files/1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_?fields=name%2CmimeType%2Csize&key=AIzaSyCJIiDnha8c2FC-i543npm9SBNNRhCCWWs'
+    }
+  },
+  error: undefined,
+  status: 404,
+  code: 404,
+  errors: [
+    {
+      message: 'File not found: 1UmF924G-ZKBaoZY-EQN8BMdBbObycAU_.',
+      domain: 'global',
+      reason: 'notFound',
+      location: 'fileId',
+      locationType: 'parameter'
+    }
+  ],
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+2025-09-28T09:33:23.922Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:33:29.969Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:33:39.380Z [LOG] Checking for scheduled streams (2025-09-28T09:33:39.380Z to 2025-09-28T09:34:39.380Z)
+2025-09-28T09:34:39.346Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:34:39.347Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:34:39.393Z [LOG] Checking for scheduled streams (2025-09-28T09:34:39.393Z to 2025-09-28T09:35:39.393Z)
+2025-09-28T09:35:12.154Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:35:17.574Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:35:39.351Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:35:39.351Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:35:39.398Z [LOG] Checking for scheduled streams (2025-09-28T09:35:39.398Z to 2025-09-28T09:36:39.398Z)
+2025-09-28T09:35:57.659Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:36:02.852Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:36:39.357Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:36:39.358Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:36:39.403Z [LOG] Checking for scheduled streams (2025-09-28T09:36:39.403Z to 2025-09-28T09:37:39.403Z)
+2025-09-28T09:37:39.409Z [LOG] Checking for scheduled streams (2025-09-28T09:37:39.409Z to 2025-09-28T09:38:39.409Z)
+2025-09-28T09:38:39.364Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:38:39.365Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:38:39.412Z [LOG] Checking for scheduled streams (2025-09-28T09:38:39.411Z to 2025-09-28T09:39:39.411Z)
+2025-09-28T09:38:44.659Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:38:44.961Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:38:44.978Z [LOG] StreamFlow running at:
+2025-09-28T09:38:44.978Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:38:44.979Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:38:44.979Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:38:44.981Z [LOG] Stream scheduler initialized
+2025-09-28T09:38:44.982Z [LOG] Checking for scheduled streams (2025-09-28T09:38:44.982Z to 2025-09-28T09:39:44.982Z)
+2025-09-28T09:38:44.983Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:38:44.984Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:39:07.452Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:39:07.720Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:39:07.739Z [LOG] StreamFlow running at:
+2025-09-28T09:39:07.740Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:39:07.740Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:39:07.740Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:39:07.744Z [LOG] Stream scheduler initialized
+2025-09-28T09:39:07.744Z [LOG] Checking for scheduled streams (2025-09-28T09:39:07.744Z to 2025-09-28T09:40:07.744Z)
+2025-09-28T09:39:07.746Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:39:07.747Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:40:07.754Z [LOG] Checking for scheduled streams (2025-09-28T09:40:07.754Z to 2025-09-28T09:41:07.754Z)
+2025-09-28T09:41:07.722Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:41:07.722Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:41:07.768Z [LOG] Checking for scheduled streams (2025-09-28T09:41:07.768Z to 2025-09-28T09:42:07.768Z)
+2025-09-28T09:42:07.772Z [LOG] Checking for scheduled streams (2025-09-28T09:42:07.772Z to 2025-09-28T09:43:07.772Z)
+2025-09-28T09:42:18.905Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:42:19.159Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:42:19.176Z [LOG] StreamFlow running at:
+2025-09-28T09:42:19.176Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:42:19.177Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:42:19.177Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:42:19.180Z [LOG] Stream scheduler initialized
+2025-09-28T09:42:19.180Z [LOG] Checking for scheduled streams (2025-09-28T09:42:19.180Z to 2025-09-28T09:43:19.180Z)
+2025-09-28T09:42:19.181Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:42:19.183Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:43:19.191Z [LOG] Checking for scheduled streams (2025-09-28T09:43:19.190Z to 2025-09-28T09:44:19.190Z)
+2025-09-28T09:44:11.780Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:44:12.037Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:44:12.054Z [LOG] StreamFlow running at:
+2025-09-28T09:44:12.054Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:44:12.054Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:44:12.054Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:44:12.061Z [LOG] Stream scheduler initialized
+2025-09-28T09:44:12.061Z [LOG] Checking for scheduled streams (2025-09-28T09:44:12.061Z to 2025-09-28T09:45:12.061Z)
+2025-09-28T09:44:12.062Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:44:12.062Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:44:37.564Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:44:37.825Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:44:37.844Z [LOG] StreamFlow running at:
+2025-09-28T09:44:37.844Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:44:37.844Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:44:37.845Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:44:37.847Z [LOG] Stream scheduler initialized
+2025-09-28T09:44:37.848Z [LOG] Checking for scheduled streams (2025-09-28T09:44:37.848Z to 2025-09-28T09:45:37.848Z)
+2025-09-28T09:44:37.849Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:44:37.850Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:45:05.317Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:45:05.584Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:45:05.602Z [LOG] StreamFlow running at:
+2025-09-28T09:45:05.602Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:45:05.603Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:45:05.603Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:45:05.606Z [LOG] Stream scheduler initialized
+2025-09-28T09:45:05.606Z [LOG] Checking for scheduled streams (2025-09-28T09:45:05.606Z to 2025-09-28T09:46:05.606Z)
+2025-09-28T09:45:05.607Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:45:05.609Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:45:40.139Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:45:40.410Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:45:40.429Z [LOG] StreamFlow running at:
+2025-09-28T09:45:40.429Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:45:40.429Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:45:40.429Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:45:40.433Z [LOG] Stream scheduler initialized
+2025-09-28T09:45:40.433Z [LOG] Checking for scheduled streams (2025-09-28T09:45:40.433Z to 2025-09-28T09:46:40.433Z)
+2025-09-28T09:45:40.434Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:45:40.436Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:46:25.890Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:46:26.145Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:46:26.162Z [LOG] StreamFlow running at:
+2025-09-28T09:46:26.162Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:46:26.162Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:46:26.163Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:46:26.165Z [LOG] Stream scheduler initialized
+2025-09-28T09:46:26.166Z [LOG] Checking for scheduled streams (2025-09-28T09:46:26.165Z to 2025-09-28T09:47:26.165Z)
+2025-09-28T09:46:26.166Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:46:26.168Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:47:01.139Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:47:06.155Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:47:26.170Z [LOG] Checking for scheduled streams (2025-09-28T09:47:26.170Z to 2025-09-28T09:48:26.170Z)
+2025-09-28T09:47:44.079Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:47:48.850Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:48:26.158Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:48:26.159Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:48:26.174Z [LOG] Checking for scheduled streams (2025-09-28T09:48:26.173Z to 2025-09-28T09:49:26.173Z)
+2025-09-28T09:48:30.525Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T09:49:26.184Z [LOG] Checking for scheduled streams (2025-09-28T09:49:26.184Z to 2025-09-28T09:50:26.184Z)
+2025-09-28T09:50:26.167Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T09:50:26.167Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T09:50:26.199Z [LOG] Checking for scheduled streams (2025-09-28T09:50:26.199Z to 2025-09-28T09:51:26.199Z)
+2025-09-28T09:50:39.572Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:50:39.830Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:50:39.846Z [LOG] StreamFlow running at:
+2025-09-28T09:50:39.847Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:50:39.847Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:50:39.847Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:50:39.850Z [LOG] Stream scheduler initialized
+2025-09-28T09:50:39.850Z [LOG] Checking for scheduled streams (2025-09-28T09:50:39.850Z to 2025-09-28T09:51:39.850Z)
+2025-09-28T09:50:39.851Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:50:39.852Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:58:22.405Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T09:58:22.681Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T09:58:22.698Z [LOG] StreamFlow running at:
+2025-09-28T09:58:22.698Z [LOG]   http://192.168.1.3:7575
+2025-09-28T09:58:22.698Z [LOG]   http://169.254.190.42:7575
+2025-09-28T09:58:22.699Z [LOG]   http://169.254.13.154:7575
+2025-09-28T09:58:22.702Z [LOG] Stream scheduler initialized
+2025-09-28T09:58:22.702Z [LOG] Checking for scheduled streams (2025-09-28T09:58:22.702Z to 2025-09-28T09:59:22.702Z)
+2025-09-28T09:58:22.703Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T09:58:22.705Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T09:59:06.451Z [LOG] processGoogleDriveFolderImport called with folderPath: asdasd
+2025-09-28T09:59:06.829Z [LOG] downloadFolder: using folderPath = asdasd
+2025-09-28T09:59:17.246Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T09:59:22.701Z [LOG] Checking for scheduled streams (2025-09-28T09:59:22.701Z to 2025-09-28T10:00:22.701Z)
+2025-09-28T09:59:22.776Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T10:00:22.682Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:00:22.683Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:00:22.714Z [LOG] Checking for scheduled streams (2025-09-28T10:00:22.714Z to 2025-09-28T10:01:22.714Z)
+2025-09-28T10:01:10.296Z [LOG] processGoogleDriveImport called with folderPath: asdasd
+2025-09-28T10:01:15.457Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T10:01:22.723Z [LOG] Checking for scheduled streams (2025-09-28T10:01:22.723Z to 2025-09-28T10:02:22.723Z)
+2025-09-28T10:01:36.887Z [LOG] processGoogleDriveImport called with folderPath: adasd
+2025-09-28T10:01:43.521Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T10:02:22.695Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:02:22.696Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:02:22.726Z [LOG] Checking for scheduled streams (2025-09-28T10:02:22.726Z to 2025-09-28T10:03:22.726Z)
+2025-09-28T10:03:22.693Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:03:22.694Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:03:22.740Z [LOG] Checking for scheduled streams (2025-09-28T10:03:22.740Z to 2025-09-28T10:04:22.740Z)
+2025-09-28T10:04:22.706Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:04:22.707Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:04:22.753Z [LOG] Checking for scheduled streams (2025-09-28T10:04:22.753Z to 2025-09-28T10:05:22.753Z)
+2025-09-28T10:05:22.759Z [LOG] Checking for scheduled streams (2025-09-28T10:05:22.758Z to 2025-09-28T10:06:22.758Z)
+2025-09-28T10:06:22.711Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:06:22.712Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:06:22.758Z [LOG] Checking for scheduled streams (2025-09-28T10:06:22.758Z to 2025-09-28T10:07:22.758Z)
+2025-09-28T10:07:22.773Z [LOG] Checking for scheduled streams (2025-09-28T10:07:22.773Z to 2025-09-28T10:08:22.773Z)
+2025-09-28T10:07:29.939Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T10:07:30.198Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T10:07:30.215Z [LOG] StreamFlow running at:
+2025-09-28T10:07:30.215Z [LOG]   http://192.168.1.3:7575
+2025-09-28T10:07:30.215Z [LOG]   http://169.254.190.42:7575
+2025-09-28T10:07:30.216Z [LOG]   http://169.254.13.154:7575
+2025-09-28T10:07:30.218Z [LOG] Stream scheduler initialized
+2025-09-28T10:07:30.219Z [LOG] Checking for scheduled streams (2025-09-28T10:07:30.219Z to 2025-09-28T10:08:30.219Z)
+2025-09-28T10:07:30.220Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:07:30.221Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:08:30.228Z [LOG] Checking for scheduled streams (2025-09-28T10:08:30.228Z to 2025-09-28T10:09:30.228Z)
+2025-09-28T10:08:36.685Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T10:08:36.940Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T10:08:36.957Z [LOG] StreamFlow running at:
+2025-09-28T10:08:36.957Z [LOG]   http://192.168.1.3:7575
+2025-09-28T10:08:36.957Z [LOG]   http://169.254.190.42:7575
+2025-09-28T10:08:36.957Z [LOG]   http://169.254.13.154:7575
+2025-09-28T10:08:36.960Z [LOG] Stream scheduler initialized
+2025-09-28T10:08:36.960Z [LOG] Checking for scheduled streams (2025-09-28T10:08:36.960Z to 2025-09-28T10:09:36.960Z)
+2025-09-28T10:08:36.961Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:08:36.963Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:09:36.972Z [LOG] Checking for scheduled streams (2025-09-28T10:09:36.972Z to 2025-09-28T10:10:36.972Z)
+2025-09-28T10:10:36.941Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:10:36.941Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:10:36.972Z [LOG] Checking for scheduled streams (2025-09-28T10:10:36.972Z to 2025-09-28T10:11:36.972Z)
+2025-09-28T10:11:36.982Z [LOG] Checking for scheduled streams (2025-09-28T10:11:36.981Z to 2025-09-28T10:12:36.981Z)
+2025-09-28T10:12:36.945Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:12:36.946Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:12:36.992Z [LOG] Checking for scheduled streams (2025-09-28T10:12:36.991Z to 2025-09-28T10:13:36.991Z)
+2025-09-28T10:13:36.949Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:13:36.949Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:13:36.995Z [LOG] Checking for scheduled streams (2025-09-28T10:13:36.995Z to 2025-09-28T10:14:36.995Z)
+2025-09-28T10:14:36.950Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:14:36.950Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:14:36.997Z [LOG] Checking for scheduled streams (2025-09-28T10:14:36.997Z to 2025-09-28T10:15:36.997Z)
+2025-09-28T10:15:36.998Z [LOG] Checking for scheduled streams (2025-09-28T10:15:36.998Z to 2025-09-28T10:16:36.998Z)
+2025-09-28T10:16:36.964Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:16:36.965Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:16:37.010Z [LOG] Checking for scheduled streams (2025-09-28T10:16:37.010Z to 2025-09-28T10:17:37.010Z)
+2025-09-28T10:17:37.024Z [LOG] Checking for scheduled streams (2025-09-28T10:17:37.024Z to 2025-09-28T10:18:37.024Z)
+2025-09-28T10:18:36.960Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:18:36.960Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:18:36.975Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:18:36.976Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:18:37.038Z [LOG] Checking for scheduled streams (2025-09-28T10:18:37.038Z to 2025-09-28T10:19:37.038Z)
+2025-09-28T10:19:37.051Z [LOG] Checking for scheduled streams (2025-09-28T10:19:37.050Z to 2025-09-28T10:20:37.050Z)
+2025-09-28T10:20:36.988Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:20:36.989Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:20:37.065Z [LOG] Checking for scheduled streams (2025-09-28T10:20:37.065Z to 2025-09-28T10:21:37.065Z)
+2025-09-28T10:21:37.067Z [LOG] Checking for scheduled streams (2025-09-28T10:21:37.067Z to 2025-09-28T10:22:37.067Z)
+2025-09-28T10:22:36.999Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:22:36.999Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:22:37.076Z [LOG] Checking for scheduled streams (2025-09-28T10:22:37.076Z to 2025-09-28T10:23:37.076Z)
+2025-09-28T10:23:36.971Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:23:36.972Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:23:37.080Z [LOG] Checking for scheduled streams (2025-09-28T10:23:37.080Z to 2025-09-28T10:24:37.080Z)
+2025-09-28T10:24:37.013Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:24:37.013Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:24:37.091Z [LOG] Checking for scheduled streams (2025-09-28T10:24:37.090Z to 2025-09-28T10:25:37.090Z)
+2025-09-28T10:25:37.096Z [LOG] Checking for scheduled streams (2025-09-28T10:25:37.096Z to 2025-09-28T10:26:37.096Z)
+2025-09-28T10:26:37.015Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:26:37.015Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:26:37.107Z [LOG] Checking for scheduled streams (2025-09-28T10:26:37.107Z to 2025-09-28T10:27:37.107Z)
+2025-09-28T10:27:37.108Z [LOG] Checking for scheduled streams (2025-09-28T10:27:37.107Z to 2025-09-28T10:28:37.107Z)
+2025-09-28T10:28:36.982Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:28:36.983Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:28:37.028Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:28:37.028Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:28:37.121Z [LOG] Checking for scheduled streams (2025-09-28T10:28:37.121Z to 2025-09-28T10:29:37.121Z)
+2025-09-28T10:29:37.131Z [LOG] Checking for scheduled streams (2025-09-28T10:29:37.131Z to 2025-09-28T10:30:37.131Z)
+2025-09-28T10:30:37.036Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:30:37.036Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:30:37.146Z [LOG] Checking for scheduled streams (2025-09-28T10:30:37.146Z to 2025-09-28T10:31:37.146Z)
+2025-09-28T10:31:37.154Z [LOG] Checking for scheduled streams (2025-09-28T10:31:37.153Z to 2025-09-28T10:32:37.153Z)
+2025-09-28T10:32:37.041Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:32:37.041Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:32:37.166Z [LOG] Checking for scheduled streams (2025-09-28T10:32:37.166Z to 2025-09-28T10:33:37.166Z)
+2025-09-28T10:33:36.990Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:33:36.991Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:33:37.176Z [LOG] Checking for scheduled streams (2025-09-28T10:33:37.176Z to 2025-09-28T10:34:37.176Z)
+2025-09-28T10:34:37.043Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:34:37.044Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:34:37.183Z [LOG] Checking for scheduled streams (2025-09-28T10:34:37.183Z to 2025-09-28T10:35:37.183Z)
+2025-09-28T10:35:37.196Z [LOG] Checking for scheduled streams (2025-09-28T10:35:37.196Z to 2025-09-28T10:36:37.196Z)
+2025-09-28T10:36:37.052Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:36:37.052Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:36:37.210Z [LOG] Checking for scheduled streams (2025-09-28T10:36:37.210Z to 2025-09-28T10:37:37.210Z)
+2025-09-28T10:37:37.220Z [LOG] Checking for scheduled streams (2025-09-28T10:37:37.220Z to 2025-09-28T10:38:37.220Z)
+2025-09-28T10:38:37.000Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:38:37.001Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:38:37.061Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:38:37.062Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:38:37.233Z [LOG] Checking for scheduled streams (2025-09-28T10:38:37.232Z to 2025-09-28T10:39:37.232Z)
+2025-09-28T10:39:37.242Z [LOG] Checking for scheduled streams (2025-09-28T10:39:37.241Z to 2025-09-28T10:40:37.241Z)
+2025-09-28T10:40:37.067Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:40:37.067Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:40:37.252Z [LOG] Checking for scheduled streams (2025-09-28T10:40:37.252Z to 2025-09-28T10:41:37.252Z)
+2025-09-28T10:41:37.252Z [LOG] Checking for scheduled streams (2025-09-28T10:41:37.252Z to 2025-09-28T10:42:37.252Z)
+2025-09-28T10:42:37.076Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:42:37.077Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:42:37.264Z [LOG] Checking for scheduled streams (2025-09-28T10:42:37.264Z to 2025-09-28T10:43:37.264Z)
+2025-09-28T10:43:37.013Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:43:37.014Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:43:37.278Z [LOG] Checking for scheduled streams (2025-09-28T10:43:37.278Z to 2025-09-28T10:44:37.278Z)
+2025-09-28T10:44:37.089Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:44:37.090Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:44:37.293Z [LOG] Checking for scheduled streams (2025-09-28T10:44:37.293Z to 2025-09-28T10:45:37.293Z)
+2025-09-28T10:45:37.300Z [LOG] Checking for scheduled streams (2025-09-28T10:45:37.300Z to 2025-09-28T10:46:37.300Z)
+2025-09-28T10:46:37.103Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:46:37.103Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:46:37.306Z [LOG] Checking for scheduled streams (2025-09-28T10:46:37.306Z to 2025-09-28T10:47:37.306Z)
+2025-09-28T10:47:37.307Z [LOG] Checking for scheduled streams (2025-09-28T10:47:37.307Z to 2025-09-28T10:48:37.307Z)
+2025-09-28T10:47:38.294Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T10:47:38.558Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T10:47:38.574Z [LOG] StreamFlow running at:
+2025-09-28T10:47:38.575Z [LOG]   http://192.168.1.3:7575
+2025-09-28T10:47:38.575Z [LOG]   http://169.254.190.42:7575
+2025-09-28T10:47:38.575Z [LOG]   http://169.254.13.154:7575
+2025-09-28T10:47:38.578Z [LOG] Stream scheduler initialized
+2025-09-28T10:47:38.578Z [LOG] Checking for scheduled streams (2025-09-28T10:47:38.578Z to 2025-09-28T10:48:38.578Z)
+2025-09-28T10:47:38.579Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:47:38.581Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:47:56.490Z [LOG] processGoogleDriveFolderImport called with folderPath: asd
+2025-09-28T10:47:56.913Z [LOG] downloadFolder: using folderPath = asd
+2025-09-28T10:48:06.273Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T10:48:11.902Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T10:48:38.592Z [LOG] Checking for scheduled streams (2025-09-28T10:48:38.592Z to 2025-09-28T10:49:38.592Z)
+2025-09-28T10:49:38.573Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:49:38.574Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:49:38.604Z [LOG] Checking for scheduled streams (2025-09-28T10:49:38.604Z to 2025-09-28T10:50:38.604Z)
+2025-09-28T10:50:38.618Z [LOG] Checking for scheduled streams (2025-09-28T10:50:38.618Z to 2025-09-28T10:51:38.618Z)
+2025-09-28T10:51:38.578Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:51:38.578Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:51:38.624Z [LOG] Checking for scheduled streams (2025-09-28T10:51:38.624Z to 2025-09-28T10:52:38.624Z)
+2025-09-28T10:51:40.673Z [LOG] processGoogleDriveFolderImport called with folderPath: adasd
+2025-09-28T10:51:41.001Z [LOG] downloadFolder: using folderPath = adasd
+2025-09-28T10:51:49.825Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T10:51:55.301Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T10:52:38.568Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:52:38.569Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:52:38.630Z [LOG] Checking for scheduled streams (2025-09-28T10:52:38.630Z to 2025-09-28T10:53:38.630Z)
+2025-09-28T10:53:15.058Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T10:53:15.355Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T10:53:15.374Z [LOG] StreamFlow running at:
+2025-09-28T10:53:15.375Z [LOG]   http://192.168.1.3:7575
+2025-09-28T10:53:15.375Z [LOG]   http://169.254.190.42:7575
+2025-09-28T10:53:15.375Z [LOG]   http://169.254.13.154:7575
+2025-09-28T10:53:15.379Z [LOG] Stream scheduler initialized
+2025-09-28T10:53:15.379Z [LOG] Checking for scheduled streams (2025-09-28T10:53:15.379Z to 2025-09-28T10:54:15.379Z)
+2025-09-28T10:53:15.380Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:53:15.382Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:53:26.433Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T10:53:26.704Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T10:53:26.721Z [LOG] StreamFlow running at:
+2025-09-28T10:53:26.721Z [LOG]   http://192.168.1.3:7575
+2025-09-28T10:53:26.722Z [LOG]   http://169.254.190.42:7575
+2025-09-28T10:53:26.722Z [LOG]   http://169.254.13.154:7575
+2025-09-28T10:53:26.725Z [LOG] Stream scheduler initialized
+2025-09-28T10:53:26.725Z [LOG] Checking for scheduled streams (2025-09-28T10:53:26.725Z to 2025-09-28T10:54:26.725Z)
+2025-09-28T10:53:26.726Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:53:26.728Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:54:26.727Z [LOG] Checking for scheduled streams (2025-09-28T10:54:26.727Z to 2025-09-28T10:55:26.727Z)
+2025-09-28T10:55:26.706Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:55:26.706Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:55:26.736Z [LOG] Checking for scheduled streams (2025-09-28T10:55:26.736Z to 2025-09-28T10:56:26.736Z)
+2025-09-28T10:56:26.744Z [LOG] Checking for scheduled streams (2025-09-28T10:56:26.744Z to 2025-09-28T10:57:26.744Z)
+2025-09-28T10:57:26.712Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:57:26.712Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:57:26.758Z [LOG] Checking for scheduled streams (2025-09-28T10:57:26.758Z to 2025-09-28T10:58:26.758Z)
+2025-09-28T10:58:26.718Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T10:58:26.719Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T10:58:26.764Z [LOG] Checking for scheduled streams (2025-09-28T10:58:26.764Z to 2025-09-28T10:59:26.764Z)
+2025-09-28T10:59:26.725Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T10:59:26.725Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T10:59:26.772Z [LOG] Checking for scheduled streams (2025-09-28T10:59:26.771Z to 2025-09-28T11:00:26.771Z)
+2025-09-28T11:00:08.526Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T11:00:08.797Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T11:00:08.814Z [LOG] StreamFlow running at:
+2025-09-28T11:00:08.814Z [LOG]   http://192.168.1.3:7575
+2025-09-28T11:00:08.814Z [LOG]   http://169.254.190.42:7575
+2025-09-28T11:00:08.814Z [LOG]   http://169.254.13.154:7575
+2025-09-28T11:00:08.817Z [LOG] Stream scheduler initialized
+2025-09-28T11:00:08.817Z [LOG] Checking for scheduled streams (2025-09-28T11:00:08.817Z to 2025-09-28T11:01:08.817Z)
+2025-09-28T11:00:08.818Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T11:00:08.820Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T11:00:23.807Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T11:00:24.078Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T11:00:24.094Z [LOG] StreamFlow running at:
+2025-09-28T11:00:24.095Z [LOG]   http://192.168.1.3:7575
+2025-09-28T11:00:24.095Z [LOG]   http://169.254.190.42:7575
+2025-09-28T11:00:24.095Z [LOG]   http://169.254.13.154:7575
+2025-09-28T11:00:24.098Z [LOG] Stream scheduler initialized
+2025-09-28T11:00:24.098Z [LOG] Checking for scheduled streams (2025-09-28T11:00:24.098Z to 2025-09-28T11:01:24.098Z)
+2025-09-28T11:00:24.099Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T11:00:24.101Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T11:01:24.113Z [LOG] Checking for scheduled streams (2025-09-28T11:01:24.113Z to 2025-09-28T11:02:24.113Z)
+2025-09-28T11:02:24.087Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T11:02:24.088Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T11:02:24.118Z [LOG] Checking for scheduled streams (2025-09-28T11:02:24.118Z to 2025-09-28T11:03:24.118Z)
+2025-09-28T11:02:33.708Z [LOG] Logger initialized. Output will be written to console and logs/app.log
+2025-09-28T11:02:33.958Z [LOG] Using bundled FFmpeg at: F:\livestream\streamflow\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe
+2025-09-28T11:02:33.975Z [LOG] StreamFlow running at:
+2025-09-28T11:02:33.976Z [LOG]   http://192.168.1.3:7575
+2025-09-28T11:02:33.976Z [LOG]   http://169.254.190.42:7575
+2025-09-28T11:02:33.976Z [LOG]   http://169.254.13.154:7575
+2025-09-28T11:02:33.979Z [LOG] Stream scheduler initialized
+2025-09-28T11:02:33.979Z [LOG] Checking for scheduled streams (2025-09-28T11:02:33.979Z to 2025-09-28T11:03:33.979Z)
+2025-09-28T11:02:33.980Z [LOG] [StreamingService] Syncing stream statuses...
+2025-09-28T11:02:33.981Z [LOG] [StreamingService] Stream status sync completed. Active streams: 0, Stopping: 0
+2025-09-28T11:02:58.675Z [LOG] processGoogleDriveFolderImport called with folderPath: asdads
+2025-09-28T11:02:58.998Z [LOG] downloadFolder: using folderPath = asdads
+2025-09-28T11:03:09.613Z [LOG] Downloaded file ASMR2.mp4 from Google Drive
+2025-09-28T11:03:15.680Z [LOG] Downloaded file ASMR RAIN.mp4 from Google Drive
+2025-09-28T11:03:33.981Z [LOG] Checking for scheduled streams (2025-09-28T11:03:33.980Z to 2025-09-28T11:04:33.980Z)
+2025-09-28T11:04:33.967Z [LOG] [StreamingService] Checking for zombie processes...
+2025-09-28T11:04:33.968Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
+2025-09-28T11:04:33.983Z [LOG] Checking for scheduled streams (2025-09-28T11:04:33.983Z to 2025-09-28T11:05:33.983Z)
