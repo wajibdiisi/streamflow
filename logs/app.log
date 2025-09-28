@@ -644,3 +644,4 @@
 2025-09-28T11:04:33.967Z [LOG] [StreamingService] Checking for zombie processes...
 2025-09-28T11:04:33.968Z [LOG] [StreamingService] Zombie process cleanup completed. Active streams: 0
 2025-09-28T11:04:33.983Z [LOG] Checking for scheduled streams (2025-09-28T11:04:33.983Z to 2025-09-28T11:05:33.983Z)
+2025-09-28T11:05:33.991Z [LOG] Checking for scheduled streams (2025-09-28T11:05:33.991Z to 2025-09-28T11:06:33.991Z)
