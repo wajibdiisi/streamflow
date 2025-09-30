@@ -18,23 +18,37 @@ const { db, checkIfUsersExist } = require('./db/database');
 const systemMonitor = require('./services/systemMonitor');
 const { uploadVideo } = require('./middleware/uploadMiddleware');
 const { ensureDirectories } = require('./utils/storage');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegConfig = require('./utils/ffmpegConfig');
+
+// Configure fluent-ffmpeg with detected paths
+ffmpeg.setFfmpegPath(ffmpegConfig.getFFmpegPath());
+ffmpeg.setFfprobePath(ffmpegConfig.getFFprobePath());
 const { getVideoInfo, generateThumbnail } = require('./utils/videoProcessor');
 const Video = require('./models/Video');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const streamingService = require('./services/streamingService');
 const schedulerService = require('./services/schedulerService');
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const telegramService = require('./services/telegramService');
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('-----------------------------------');
-  console.error('UNHANDLED REJECTION AT:', promise);
-  console.error('REASON:', reason);
-  console.error('-----------------------------------');
+  // Prevent infinite loop by using original console methods
+  try {
+    process.stderr.write('-----------------------------------\n');
+    process.stderr.write('UNHANDLED REJECTION AT: ' + promise + '\n');
+    process.stderr.write('REASON: ' + reason + '\n');
+    process.stderr.write('-----------------------------------\n');
+  } catch (e) {
+    // If stderr is broken, just ignore
+  }
 });
 process.on('uncaughtException', (error) => {
-  console.error('-----------------------------------');
-  console.error('UNCAUGHT EXCEPTION:', error);
-  console.error('-----------------------------------');
+  // Prevent infinite loop by using original console methods
+  try {
+    process.stderr.write('-----------------------------------\n');
+    process.stderr.write('UNCAUGHT EXCEPTION: ' + error.message + '\n');
+    process.stderr.write('-----------------------------------\n');
+  } catch (e) {
+    // If stderr is broken, just ignore
+  }
 });
 const app = express();
 app.set("trust proxy", 1);
@@ -474,6 +488,19 @@ app.get('/folders', isAuthenticated, async (req, res) => {
   }
 });
 
+app.get('/stream-keys', isAuthenticated, async (req, res) => {
+  try {
+    res.render('stream-keys', {
+      title: 'Stream Key Management',
+      active: 'stream-keys',
+      user: await User.findById(req.session.userId)
+    });
+  } catch (error) {
+    console.error('Stream keys error:', error);
+    res.redirect('/dashboard');
+  }
+});
+
 app.get('/settings', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
@@ -523,6 +550,199 @@ app.get('/history', isAuthenticated, async (req, res) => {
     });
   }
 });
+
+app.get('/telegram-alerts', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
+    res.render('telegram-alerts', {
+      title: 'Telegram Alerts',
+      active: 'telegram-alerts',
+      user: user
+    });
+  } catch (error) {
+    console.error('Telegram alerts error:', error);
+    res.redirect('/dashboard');
+  }
+});
+
+// FFmpeg info endpoint
+app.get('/api/ffmpeg-info', isAuthenticated, async (req, res) => {
+  try {
+    const { spawn } = require('child_process');
+    
+    const configInfo = ffmpegConfig.getConfigInfo();
+    const ffmpegPath = configInfo.ffmpeg.path;
+    const ffprobePath = configInfo.ffprobe.path;
+    
+    // Get FFmpeg version
+    const ffmpegProcess = spawn(ffmpegPath, ['-version']);
+    let versionOutput = '';
+    
+    ffmpegProcess.stdout.on('data', (data) => {
+      versionOutput += data.toString();
+    });
+    
+    ffmpegProcess.stderr.on('data', (data) => {
+      versionOutput += data.toString();
+    });
+    
+    ffmpegProcess.on('close', (code) => {
+      if (code === 0) {
+        const lines = versionOutput.split('\n');
+        const versionLine = lines[0];
+        const configLine = lines[1];
+        
+        // Extract version info
+        const versionMatch = versionLine.match(/ffmpeg version (.+?) Copyright/);
+        const version = versionMatch ? versionMatch[1] : 'Unknown';
+        
+        // Extract build info
+        const buildMatch = versionLine.match(/built with (.+?)$/);
+        const buildInfo = buildMatch ? buildMatch[1] : 'Unknown';
+        
+        // Extract library versions
+        const libVersions = {};
+        lines.forEach(line => {
+          const libMatch = line.match(/^lib(\w+)\s+(\d+\.\s*\d+\.\s*\d+)/);
+          if (libMatch) {
+            libVersions[libMatch[1]] = libMatch[2];
+          }
+        });
+        
+        res.json({
+          success: true,
+          ffmpeg: {
+            path: ffmpegPath,
+            source: configInfo.ffmpeg.source,
+            version: version,
+            buildInfo: buildInfo,
+            configuration: configLine,
+            libraries: libVersions,
+            fullOutput: versionOutput,
+            available: configInfo.ffmpeg.available
+          },
+          ffprobe: {
+            path: ffprobePath,
+            source: configInfo.ffprobe.source,
+            available: configInfo.ffprobe.available
+          },
+          platform: configInfo.platform
+        });
+      } else {
+        res.json({
+          success: false,
+          error: 'Failed to get FFmpeg version',
+          ffmpeg: {
+            path: ffmpegPath,
+            source: configInfo.ffmpeg.source,
+            available: configInfo.ffmpeg.available
+          },
+          ffprobe: {
+            path: ffprobePath,
+            source: configInfo.ffprobe.source,
+            available: configInfo.ffprobe.available
+          },
+          platform: configInfo.platform
+        });
+      }
+    });
+    
+  } catch (error) {
+    console.error('FFmpeg info error:', error);
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Telegram alerts routes
+app.post('/telegram-alerts/save', isAuthenticated, [
+  body('botToken').trim().matches(/^\d{6,}:[A-Za-z0-9_\-]{20,}$/).withMessage('Invalid bot token format'),
+  body('chatId').trim().isLength({ min: 1 }).withMessage('Chat ID is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.render('telegram-alerts', {
+        title: 'Telegram Alerts',
+        active: 'telegram-alerts',
+        user: await User.findById(req.session.userId),
+        error: errors.array()[0].msg
+      });
+    }
+    const enabled = req.body.enabled === 'on' || req.body.enabled === 'true' || req.body.enabled === true;
+    const alertOnStart = req.body.alertOnStart === 'on' || req.body.alertOnStart === 'true' || req.body.alertOnStart === true;
+    const alertOnError = req.body.alertOnError === 'on' || req.body.alertOnError === 'true' || req.body.alertOnError === true;
+    const alertOnStop = req.body.alertOnStop === 'on' || req.body.alertOnStop === 'true' || req.body.alertOnStop === true;
+    await User.update(req.session.userId, {
+      telegram_bot_token: req.body.botToken,
+      telegram_chat_id: req.body.chatId,
+      telegram_enabled: enabled ? 1 : 0,
+      telegram_alert_on_start: alertOnStart ? 1 : 0,
+      telegram_alert_on_error: alertOnError ? 1 : 0,
+      telegram_alert_on_stop: alertOnStop ? 1 : 0,
+    });
+    return res.render('telegram-alerts', {
+      title: 'Telegram Alerts',
+      active: 'telegram-alerts',
+      user: await User.findById(req.session.userId),
+      success: 'Telegram settings saved successfully!'
+    });
+  } catch (error) {
+    console.error('Error saving Telegram settings:', error);
+    return res.render('telegram-alerts', {
+      title: 'Telegram Alerts',
+      active: 'telegram-alerts',
+      user: await User.findById(req.session.userId),
+      error: 'Failed to save Telegram settings'
+    });
+  }
+});
+
+app.post('/telegram-alerts/clear', isAuthenticated, async (req, res) => {
+  try {
+    await User.update(req.session.userId, {
+      telegram_bot_token: null,
+      telegram_chat_id: null,
+      telegram_enabled: 0,
+      telegram_alert_on_start: 0,
+      telegram_alert_on_error: 0,
+      telegram_alert_on_stop: 0,
+    });
+    return res.render('telegram-alerts', {
+      title: 'Telegram Alerts',
+      active: 'telegram-alerts',
+      user: await User.findById(req.session.userId),
+      success: 'Telegram API information cleared successfully!'
+    });
+  } catch (error) {
+    console.error('Error clearing Telegram settings:', error);
+    return res.render('telegram-alerts', {
+      title: 'Telegram Alerts',
+      active: 'telegram-alerts',
+      user: await User.findById(req.session.userId),
+      error: 'Failed to clear Telegram settings'
+    });
+  }
+});
+
+app.post('/telegram-alerts/test', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user || !user.telegram_bot_token || !user.telegram_chat_id) {
+      return res.status(400).json({ success: false, error: 'Telegram token or chat id not set' });
+    }
+    const ok = await telegramService.sendMessage(user.telegram_bot_token, user.telegram_chat_id, '✅ Test message from Streamflow');
+    res.json({ success: ok });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to send test message' });
+  }
+});
 app.delete('/api/history/:id', isAuthenticated, async (req, res) => {
   try {
     const db = require('./db/database').db;
@@ -559,6 +779,32 @@ app.delete('/api/history/:id', isAuthenticated, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to delete history entry'
+    });
+  }
+});
+
+app.delete('/api/history', isAuthenticated, async (req, res) => {
+  try {
+    const db = require('./db/database').db;
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        'DELETE FROM stream_history WHERE user_id = ?',
+        [req.session.userId],
+        function (err) {
+          if (err) reject(err);
+          else resolve(this);
+        }
+      );
+    });
+    res.json({ 
+      success: true, 
+      message: `Deleted ${result.changes} history entries` 
+    });
+  } catch (error) {
+    console.error('Error deleting all history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete all history'
     });
   }
 });
@@ -747,6 +993,66 @@ app.post('/settings/integrations/gdrive', isAuthenticated, [
       error: 'An error occurred while saving your Google Drive API key',
       activeTab: 'integrations'
     });
+  }
+});
+
+// Telegram settings
+app.post('/settings/integrations/telegram', isAuthenticated, [
+  body('botToken').trim().matches(/^\d{6,}:[A-Za-z0-9_\-]{20,}$/).withMessage('Invalid bot token format'),
+  body('chatId').trim().isLength({ min: 1 }).withMessage('Chat ID is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.render('settings', {
+        title: 'Settings',
+        active: 'settings',
+        user: await User.findById(req.session.userId),
+        error: errors.array()[0].msg,
+        activeTab: 'integrations'
+      });
+    }
+    const enabled = req.body.enabled === 'on' || req.body.enabled === 'true' || req.body.enabled === true;
+    const alertOnStart = req.body.alertOnStart === 'on' || req.body.alertOnStart === 'true' || req.body.alertOnStart === true;
+    const alertOnError = req.body.alertOnError === 'on' || req.body.alertOnError === 'true' || req.body.alertOnError === true;
+    const alertOnStop = req.body.alertOnStop === 'on' || req.body.alertOnStop === 'true' || req.body.alertOnStop === true;
+    await User.update(req.session.userId, {
+      telegram_bot_token: req.body.botToken,
+      telegram_chat_id: req.body.chatId,
+      telegram_enabled: enabled ? 1 : 0,
+      telegram_alert_on_start: alertOnStart ? 1 : 0,
+      telegram_alert_on_error: alertOnError ? 1 : 0,
+      telegram_alert_on_stop: alertOnStop ? 1 : 0,
+    });
+    return res.render('settings', {
+      title: 'Settings',
+      active: 'settings',
+      user: await User.findById(req.session.userId),
+      success: 'Telegram settings saved',
+      activeTab: 'integrations'
+    });
+  } catch (error) {
+    console.error('Error saving Telegram settings:', error);
+    return res.render('settings', {
+      title: 'Settings',
+      active: 'settings',
+      user: await User.findById(req.session.userId),
+      error: 'Failed to save Telegram settings',
+      activeTab: 'integrations'
+    });
+  }
+});
+
+app.post('/settings/integrations/telegram/test', isAuthenticated, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user || !user.telegram_bot_token || !user.telegram_chat_id) {
+      return res.status(400).json({ success: false, error: 'Telegram token or chat id not set' });
+    }
+    const ok = await telegramService.sendMessage(user.telegram_bot_token, user.telegram_chat_id, '✅ Test message from Streamflow');
+    res.json({ success: ok });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Failed to send test message' });
   }
 });
 app.post('/upload/video', isAuthenticated, uploadVideo.single('video'), async (req, res) => {
@@ -1178,6 +1484,50 @@ app.get('/api/videos', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch videos' });
   }
 });
+// Reset usage counter for selected videos
+app.post('/api/videos/reset-usage', isAuthenticated, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'No video ids provided' });
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE videos SET used_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders}) AND user_id = ?`,
+        [...ids, req.session.userId],
+        function (err) {
+          if (err) return reject(err);
+          resolve();
+        }
+      );
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error resetting usage for selected videos:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset usage' });
+  }
+});
+// Reset usage counter for all videos in a folder
+app.post('/api/videos/folders/:folder/reset-usage', isAuthenticated, async (req, res) => {
+  try {
+    const folder = req.params.folder;
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE videos SET used_count = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND (folder_path = ? OR (? = 'Default' AND (folder_path IS NULL OR TRIM(folder_path) = '' OR folder_path = 'Default')))`,
+        [req.session.userId, folder, folder],
+        function (err) {
+          if (err) return reject(err);
+          resolve();
+        }
+      );
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error resetting usage for folder:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset folder usage' });
+  }
+});
 app.delete('/api/videos/:id', isAuthenticated, async (req, res) => {
   try {
     const videoId = req.params.id;
@@ -1414,6 +1764,333 @@ app.get('/api/videos/import-status/:jobId', isAuthenticated, async (req, res) =>
     status: importJobs[jobId]
   });
 });
+
+// Stream Key Groups API endpoints
+app.get('/api/stream-key-groups', isAuthenticated, async (req, res) => {
+  try {
+    const groups = await StreamKeyGroup.findAll(req.session.userId);
+    res.json({ success: true, groups });
+  } catch (error) {
+    console.error('Error fetching stream key groups:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch stream key groups' });
+  }
+});
+
+app.post('/api/stream-key-groups', isAuthenticated, [
+  body('name').trim().isLength({ min: 1 }).withMessage('Group name is required'),
+  body('description').optional().isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { name, description } = req.body;
+    
+    // Check if group name already exists
+    const nameExists = await StreamKeyGroup.isNameInUse(name, req.session.userId);
+    if (nameExists) {
+      return res.status(400).json({ success: false, error: 'Group name already exists' });
+    }
+
+    const group = await StreamKeyGroup.create({
+      name,
+      description,
+      user_id: req.session.userId
+    });
+
+    res.status(201).json({ success: true, group });
+  } catch (error) {
+    console.error('Error creating stream key group:', error);
+    res.status(500).json({ success: false, error: 'Failed to create stream key group' });
+  }
+});
+
+app.put('/api/stream-key-groups/:id', isAuthenticated, [
+  body('name').optional().trim().isLength({ min: 1 }).withMessage('Group name cannot be empty'),
+  body('description').optional().isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { id } = req.params;
+    const { name, description } = req.body;
+
+    // Check if group exists
+    const group = await StreamKeyGroup.findById(id);
+    if (!group || group.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    // Check if new name already exists (if name is being changed)
+    if (name && name !== group.name) {
+      const nameExists = await StreamKeyGroup.isNameInUse(name, req.session.userId, id);
+      if (nameExists) {
+        return res.status(400).json({ success: false, error: 'Group name already exists' });
+      }
+    }
+
+    const updatedGroup = await StreamKeyGroup.update(id, { name, description });
+    res.json({ success: true, group: updatedGroup });
+  } catch (error) {
+    console.error('Error updating stream key group:', error);
+    res.status(500).json({ success: false, error: 'Failed to update stream key group' });
+  }
+});
+
+app.delete('/api/stream-key-groups/:id', isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First, delete all stream keys in this group
+    const StreamKey = require('./models/StreamKey');
+    const streamKeysInGroup = await StreamKey.findByGroupId(id, req.session.userId);
+    
+    for (const streamKey of streamKeysInGroup) {
+      await StreamKey.delete(streamKey.id, req.session.userId);
+    }
+    
+    // Then delete the group
+    const result = await StreamKeyGroup.delete(id, req.session.userId);
+    
+    if (!result.deleted) {
+      return res.status(404).json({ success: false, error: 'Group not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Group and ${streamKeysInGroup.length} stream keys deleted successfully` 
+    });
+  } catch (error) {
+    console.error('Error deleting stream key group:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete stream key group' });
+  }
+});
+
+// Stream Keys API endpoints
+app.get('/api/stream-keys', isAuthenticated, async (req, res) => {
+  try {
+    const streamKeys = await StreamKey.findAll(req.session.userId);
+    
+    // Add usage information for each stream key
+    const streamKeysWithUsage = await Promise.all(
+      streamKeys.map(async (key) => {
+        const isUsedInStreams = await StreamKey.isStreamKeyUsedInStreams(key.stream_key, req.session.userId);
+        return {
+          ...key,
+          is_used_in_streams: isUsedInStreams
+        };
+      })
+    );
+    
+    res.json({ success: true, streamKeys: streamKeysWithUsage });
+  } catch (error) {
+    console.error('Error fetching stream keys:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch stream keys' });
+  }
+});
+
+app.post('/api/stream-keys', isAuthenticated, [
+  body('group_id').trim().isLength({ min: 1 }).withMessage('Group ID is required'),
+  // name optional; fallback to stream_key if missing
+  body('stream_key').trim().isLength({ min: 1 }).withMessage('Stream key is required'),
+  body('rtmp_url').optional().custom((value) => {
+    if (!value) return true; // Optional field
+    // Check if it's a valid RTMP URL or just a hostname
+    const rtmpPattern = /^(rtmp:\/\/)?([a-zA-Z0-9.-]+)(:\d+)?(\/.*)?$/;
+    if (rtmpPattern.test(value)) return true;
+    throw new Error('Invalid RTMP URL format');
+  }),
+  body('platform').optional().isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    let { group_id, name, stream_key, rtmp_url, platform, platform_icon } = req.body;
+    // Normalize and validate stream_key early to avoid false duplicate errors
+    stream_key = (stream_key || '').trim();
+    if (!stream_key) {
+      return res.status(400).json({ success: false, error: 'Stream key is required' });
+    }
+    // Use stream key as display name if name not provided
+    if (!name || !name.trim()) {
+      name = stream_key;
+    }
+
+    // Check if group exists
+    const group = await StreamKeyGroup.findById(group_id);
+    if (!group || group.user_id !== req.session.userId) {
+      return res.status(400).json({ success: false, error: 'Group not found' });
+    }
+
+    // Check if stream key already exists
+    const existingKey = await StreamKey.isStreamKeyInUse(stream_key, req.session.userId);
+    if (existingKey) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Stream key already exists' 
+      });
+    }
+
+    const streamKeyData = {
+      group_id,
+      name,
+      stream_key,
+      rtmp_url,
+      platform,
+      platform_icon,
+      user_id: req.session.userId
+    };
+
+    const streamKey = await StreamKey.create(streamKeyData);
+    res.json({ success: true, streamKey });
+  } catch (error) {
+    console.error('Error creating stream key:', error);
+    res.status(500).json({ success: false, error: 'Failed to create stream key' });
+  }
+});
+
+app.put('/api/stream-keys/:id', isAuthenticated, [
+  body('name').optional().trim().isLength({ min: 1 }).withMessage('Stream key name cannot be empty'),
+  body('stream_key').optional().trim().isLength({ min: 1 }).withMessage('Stream key cannot be empty'),
+  body('rtmp_url').optional().custom((value) => {
+    if (!value) return true; // Optional field
+    // Check if it's a valid RTMP URL or just a hostname
+    const rtmpPattern = /^(rtmp:\/\/)?([a-zA-Z0-9.-]+)(:\d+)?(\/.*)?$/;
+    if (rtmpPattern.test(value)) return true;
+    throw new Error('Invalid RTMP URL format');
+  })
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, error: errors.array()[0].msg });
+    }
+
+    const { id } = req.params;
+    const { name, stream_key, rtmp_url, platform, platform_icon } = req.body;
+
+    // Check if stream key exists and belongs to user
+    const existingKey = await StreamKey.findById(id);
+    if (!existingKey || existingKey.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Stream key not found' });
+    }
+
+    // If stream_key is being changed, check if new one already exists
+    if (stream_key && stream_key !== existingKey.stream_key) {
+      const keyInUse = await StreamKey.isStreamKeyInUse(stream_key, req.session.userId, id);
+      if (keyInUse) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Stream key already exists' 
+        });
+      }
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (stream_key) updateData.stream_key = stream_key;
+    if (rtmp_url !== undefined) updateData.rtmp_url = rtmp_url;
+    if (platform !== undefined) updateData.platform = platform;
+    if (platform_icon !== undefined) updateData.platform_icon = platform_icon;
+
+    const streamKey = await StreamKey.update(id, updateData);
+    res.json({ success: true, streamKey });
+  } catch (error) {
+    console.error('Error updating stream key:', error);
+    res.status(500).json({ success: false, error: 'Failed to update stream key' });
+  }
+});
+
+app.delete('/api/stream-keys/:id', isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if stream key is being used in any streams
+    const streamKey = await StreamKey.findById(id);
+    if (!streamKey || streamKey.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Stream key not found' });
+    }
+
+    const isUsedInStreams = await StreamKey.isStreamKeyUsedInStreams(streamKey.stream_key, req.session.userId);
+    if (isUsedInStreams) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot delete stream key that is currently being used in streams' 
+      });
+    }
+
+    const result = await StreamKey.delete(id, req.session.userId);
+    if (result.deleted) {
+      res.json({ success: true, message: 'Stream key deleted successfully' });
+    } else {
+      res.status(404).json({ success: false, error: 'Stream key not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting stream key:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete stream key' });
+  }
+});
+
+// Reset individual stream key
+app.post('/api/stream-keys/:id/reset', isAuthenticated, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if stream key exists and belongs to user
+    const streamKey = await StreamKey.findById(id);
+    if (!streamKey || streamKey.user_id !== req.session.userId) {
+      return res.status(404).json({ success: false, error: 'Stream key not found' });
+    }
+
+    // Stop any active streams using this key
+    const activeStreams = await Stream.findActiveByStreamKey(streamKey.stream_key, req.session.userId);
+    for (const stream of activeStreams) {
+      try {
+        await streamingService.stopStream(stream.id);
+        console.log(`Stopped stream ${stream.id} using key ${streamKey.stream_key}`);
+      } catch (error) {
+        console.error(`Error stopping stream ${stream.id}:`, error);
+      }
+    }
+
+    res.json({ success: true, message: 'Stream key reset successfully' });
+  } catch (error) {
+    console.error('Error resetting stream key:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset stream key' });
+  }
+});
+
+// Reset all stream keys
+app.post('/api/stream-keys/reset-all', isAuthenticated, async (req, res) => {
+  try {
+    // Get all stream keys for user
+    const streamKeys = await StreamKey.findAll(req.session.userId);
+    
+    // Stop all active streams
+    const activeStreams = await Stream.findActiveByUserId(req.session.userId);
+    for (const stream of activeStreams) {
+      try {
+        await streamingService.stopStream(stream.id);
+        console.log(`Stopped stream ${stream.id} during reset all`);
+      } catch (error) {
+        console.error(`Error stopping stream ${stream.id}:`, error);
+      }
+    }
+
+    res.json({ success: true, message: 'All stream keys reset successfully' });
+  } catch (error) {
+    console.error('Error resetting all stream keys:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset all stream keys' });
+  }
+});
 const importJobs = {};
 async function processGoogleDriveImport(jobId, apiKey, fileId, userId, folderPath = 'Default') {
   const { downloadFile } = require('./utils/googleDriveService');
@@ -1629,11 +2306,40 @@ async function processGoogleDriveFolderImport(jobId, apiKey, folderId, userId, f
 app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
   try {
     const videos = await Video.findAll(req.session.userId);
+    // Build map of videos currently in use with status information
+    const videoStatusMap = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT video_id, 
+                MAX(CASE WHEN status = 'live' THEN 1 ELSE 0 END) AS is_live,
+                MAX(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) AS is_scheduled,
+                MAX(CASE WHEN status IN ('live','scheduled') THEN 1 ELSE 0 END) AS in_use
+         FROM streams
+         WHERE user_id = ? AND video_id IS NOT NULL
+         GROUP BY video_id`,
+        [req.session.userId],
+        (err, rows) => {
+          if (err) return reject(err);
+          const map = {};
+          (rows || []).forEach(r => { 
+            if (r.video_id) {
+              map[r.video_id] = { 
+                in_use: !!r.in_use,
+                is_live: !!r.is_live,
+                is_scheduled: !!r.is_scheduled,
+                stream_status: r.is_live ? 'live' : (r.is_scheduled ? 'scheduled' : null)
+              }; 
+            }
+          });
+          resolve(map);
+        }
+      );
+    });
     const formattedVideos = videos.map(video => {
       const duration = video.duration ? Math.floor(video.duration) : 0;
       const minutes = Math.floor(duration / 60);
       const seconds = Math.floor(duration % 60);
       const formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      const statusInfo = videoStatusMap[video.id] || { in_use: false, is_live: false, is_scheduled: false, stream_status: null };
       return {
         id: video.id,
         name: video.title,
@@ -1641,6 +2347,11 @@ app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
         resolution: video.resolution || '1280x720',
         duration: formattedDuration,
         folder_path: video.folder_path || 'Default',
+        used_count: typeof video.used_count === 'number' ? video.used_count : 0,
+        in_use: statusInfo.in_use,
+        is_live: statusInfo.is_live,
+        is_scheduled: statusInfo.is_scheduled,
+        stream_status: statusInfo.stream_status,
         url: `/stream/${video.id}`
       };
     });
@@ -1651,6 +2362,8 @@ app.get('/api/stream/videos', isAuthenticated, async (req, res) => {
   }
 });
 const Stream = require('./models/Stream');
+const StreamKey = require('./models/StreamKey');
+const StreamKeyGroup = require('./models/StreamKeyGroup');
 const { title } = require('process');
 app.get('/api/streams', isAuthenticated, async (req, res) => {
   try {
@@ -1688,6 +2401,47 @@ app.post('/api/streams', isAuthenticated, [
         success: false,
         error: 'This stream key is already in use. Please use a different key.'
       });
+    }
+
+    // Optionally save manual key into a group (if requested)
+    if (req.body.saveManualKey && req.body.saveManualKey.groupName) {
+      try {
+        const groupName = String(req.body.saveManualKey.groupName).trim();
+        const stream_key = String(req.body.saveManualKey.streamKey || req.body.streamKey).trim();
+        const rtmp_url = String(req.body.saveManualKey.rtmpUrl || req.body.rtmpUrl || '').trim();
+        // Infer platform
+        let platform = 'Custom';
+        let platform_icon = 'ti-broadcast';
+        if (rtmp_url.includes('youtube.com')) { platform = 'YouTube'; platform_icon = 'ti-brand-youtube'; }
+        else if (rtmp_url.includes('facebook.com')) { platform = 'Facebook'; platform_icon = 'ti-brand-facebook'; }
+        else if (rtmp_url.includes('twitch.tv')) { platform = 'Twitch'; platform_icon = 'ti-brand-twitch'; }
+        else if (rtmp_url.includes('tiktok')) { platform = 'TikTok'; platform_icon = 'ti-brand-tiktok'; }
+        else if (rtmp_url.includes('instagram')) { platform = 'Instagram'; platform_icon = 'ti-brand-instagram'; }
+        else if (rtmp_url.includes('restream.io')) { platform = 'Restream.io'; platform_icon = 'ti-live-photo'; }
+
+        // Find group by name or create
+        const groups = await StreamKeyGroup.findAll(req.session.userId);
+        let group = groups.find(g => g.name === groupName);
+        if (!group) {
+          group = await StreamKeyGroup.create({ name: groupName, description: null, user_id: req.session.userId });
+        }
+        // Create key only if not exists for this user
+        const exists = await StreamKey.isStreamKeyInUse(stream_key, req.session.userId);
+        if (!exists) {
+          await StreamKey.create({
+            group_id: group.id,
+            name: stream_key,
+            stream_key,
+            rtmp_url: rtmp_url || null,
+            platform,
+            platform_icon,
+            user_id: req.session.userId
+          });
+        }
+      } catch (e) {
+        console.error('Error saving manual key to group:', e);
+        // Non-blocking
+      }
     }
     let platform = 'Custom';
     let platform_icon = 'ti-broadcast';
@@ -1728,7 +2482,10 @@ app.post('/api/streams', isAuthenticated, [
       use_advanced_settings: req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true,
       user_id: req.session.userId
     };
-    if (req.body.scheduleTime) {
+    if (req.body.startNow) {
+      // For start now, set status to live since it will be started immediately
+      streamData.status = 'live';
+    } else if (req.body.scheduleTime) {
       const scheduleDate = new Date(req.body.scheduleTime);
       
       const serverTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1738,12 +2495,48 @@ app.post('/api/streams', isAuthenticated, [
       console.log(`[CREATE STREAM] Local display: ${scheduleDate.toLocaleString('en-US', { timeZone: serverTimezone })}`);
       
       streamData.schedule_time = scheduleDate.toISOString();
+      streamData.status = 'scheduled';
+      
+      // Update last used for stream key if it exists in saved keys and stream is scheduled
+      try {
+        await StreamKey.updateLastUsedByStreamKey(req.body.streamKey, req.session.userId);
+      } catch (error) {
+        console.error('Error updating stream key last used:', error);
+        // Don't fail the stream creation if this fails
+      }
+    } else {
+      streamData.status = 'offline';
     }
+    
     if (req.body.duration) {
       streamData.duration = parseInt(req.body.duration);
     }
-    streamData.status = req.body.scheduleTime ? 'scheduled' : 'offline';
     const stream = await Stream.create(streamData);
+    // increment used_count for selected video
+    if (streamData.video_id) {
+      try { await Video.incrementUsedCount(streamData.video_id, 1); } catch(e) { console.error('used_count +1 failed', e.message); }
+    }
+    
+    // Update last used for stream key if it exists in saved keys
+    try {
+      await StreamKey.updateLastUsedByStreamKey(req.body.streamKey, req.session.userId);
+    } catch (error) {
+      console.error('Error updating stream key last used:', error);
+      // Don't fail the stream creation if this fails
+    }
+    
+    // If startNow is true, start the stream immediately
+    if (req.body.startNow) {
+      try {
+        console.log(`[CREATE STREAM] Starting stream immediately: ${stream.id}`);
+        await streamingService.startStream(stream.id);
+        console.log(`[CREATE STREAM] Stream started successfully: ${stream.id}`);
+      } catch (error) {
+        console.error(`[CREATE STREAM] Error starting stream immediately:`, error);
+        // Don't fail the response, just log the error
+      }
+    }
+    
     res.json({ success: true, stream });
   } catch (error) {
     console.error('Error creating stream:', error);
@@ -1789,6 +2582,13 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
     if (req.body.useAdvancedSettings !== undefined) {
       updateData.use_advanced_settings = req.body.useAdvancedSettings === 'true' || req.body.useAdvancedSettings === true;
     }
+    // Handle duration (in minutes)
+    if (req.body.duration !== undefined) {
+      const parsedDuration = parseInt(req.body.duration, 10);
+      if (!Number.isNaN(parsedDuration)) {
+        updateData.duration = parsedDuration;
+      }
+    }
     if (req.body.scheduleTime) {
       const scheduleDate = new Date(req.body.scheduleTime);
       
@@ -1800,12 +2600,46 @@ app.put('/api/streams/:id', isAuthenticated, async (req, res) => {
       
       updateData.schedule_time = scheduleDate.toISOString();
       updateData.status = 'scheduled';
+      
+      // Update last used for stream key if it exists in saved keys and stream is scheduled
+      try {
+        await StreamKey.updateLastUsedByStreamKey(stream.stream_key, req.session.userId);
+      } catch (error) {
+        console.error('Error updating stream key last used:', error);
+        // Don't fail the stream update if this fails
+      }
     } else if ('scheduleTime' in req.body && !req.body.scheduleTime) {
       updateData.schedule_time = null;
       updateData.status = 'offline';
     }
     
     const updatedStream = await Stream.update(req.params.id, updateData);
+    // if video_id changed, adjust used_count
+    if (updateData.video_id && updateData.video_id !== stream.video_id) {
+      try { if (stream.video_id) await Video.incrementUsedCount(stream.video_id, -1); } catch(e) { console.error('used_count -1 failed', e.message); }
+      try { await Video.incrementUsedCount(updateData.video_id, 1); } catch(e) { console.error('used_count +1 failed', e.message); }
+    }
+    
+    // Update last used for stream key if it exists in saved keys and was changed
+    if (req.body.streamKey && req.body.streamKey !== stream.stream_key) {
+      try {
+        await StreamKey.updateLastUsedByStreamKey(req.body.streamKey, req.session.userId);
+      } catch (error) {
+        console.error('Error updating stream key last used:', error);
+        // Don't fail the stream update if this fails
+      }
+    }
+    
+    // Update last used for stream key if it exists in saved keys and stream is scheduled
+    if (req.body.scheduleTime && !req.body.streamKey) {
+      try {
+        await StreamKey.updateLastUsedByStreamKey(stream.stream_key, req.session.userId);
+      } catch (error) {
+        console.error('Error updating stream key last used:', error);
+        // Don't fail the stream update if this fails
+      }
+    }
+    
     res.json({ success: true, stream: updatedStream });
   } catch (error) {
     console.error('Error updating stream:', error);
@@ -1822,6 +2656,8 @@ app.delete('/api/streams/:id', isAuthenticated, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized to delete this stream' });
     }
     await Stream.delete(req.params.id, req.session.userId);
+    // used_count should not decrease when stream is deleted
+    // used_count can only be reset through folder manager
     res.json({ success: true, message: 'Stream deleted successfully' });
   } catch (error) {
     console.error('Error deleting stream:', error);
@@ -1862,6 +2698,14 @@ app.post('/api/streams/:id/status', isAuthenticated, [
       }
       const result = await streamingService.startStream(streamId);
       if (result.success) {
+        // Update last used for stream key if it exists in saved keys
+        try {
+          await StreamKey.updateLastUsedByStreamKey(stream.stream_key, req.session.userId);
+        } catch (error) {
+          console.error('Error updating stream key last used:', error);
+          // Don't fail the stream start if this fails
+        }
+        
         const updatedStream = await Stream.getStreamWithVideo(streamId);
         return res.json({
           success: true,
@@ -1880,10 +2724,8 @@ app.post('/api/streams/:id/status', isAuthenticated, [
         if (!result.success) {
           console.warn('Failed to stop FFmpeg process:', result.error);
         }
-        await Stream.update(streamId, {
-          schedule_time: null
-        });
-        console.log(`Reset schedule_time for stopped stream ${streamId}`);
+        // Don't reset schedule_time for live streams to preserve scheduling info
+        console.log(`Stopped live stream ${streamId}`);
       } else if (stream.status === 'scheduled') {
         await Stream.update(streamId, {
           schedule_time: null,
@@ -1907,6 +2749,17 @@ app.post('/api/streams/:id/status', isAuthenticated, [
           error: 'Stream not found or not updated'
         });
       }
+      
+      // Update last used for stream key if it exists in saved keys and status is scheduled
+      if (newStatus === 'scheduled') {
+        try {
+          await StreamKey.updateLastUsedByStreamKey(stream.stream_key, req.session.userId);
+        } catch (error) {
+          console.error('Error updating stream key last used:', error);
+          // Don't fail the stream update if this fails
+        }
+      }
+      
       return res.json({ success: true, stream: result });
     }
   } catch (error) {
@@ -2071,11 +2924,51 @@ app.get('/api/server-time', (req, res) => {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
   const formattedTime = `${day} ${month} ${year} ${hours}:${minutes}:${seconds}`;
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const localISO = `${year}-${mm}-${day}T${hours}:${minutes}`; // server local time without timezone
   res.json({
     serverTime: now.toISOString(),
-    formattedTime: formattedTime
+    formattedTime: formattedTime,
+    localISO: localISO
   });
 });
+
+// API endpoint to manually check log size
+app.get('/api/log-size-check', isAuthenticated, async (req, res) => {
+  try {
+    const logger = require('./services/logger');
+    await logger.checkLogSizeNow();
+    res.json({ 
+      success: true, 
+      message: 'Log size check completed' 
+    });
+  } catch (error) {
+    console.error('Error checking log size:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check log size' 
+    });
+  }
+});
+
+// API endpoint to reset log size alert flag
+app.post('/api/log-size-reset', isAuthenticated, async (req, res) => {
+  try {
+    const logger = require('./services/logger');
+    logger.resetLogSizeAlert();
+    res.json({ 
+      success: true, 
+      message: 'Log size alert flag reset' 
+    });
+  } catch (error) {
+    console.error('Error resetting log size alert:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to reset log size alert' 
+    });
+  }
+});
+
 app.listen(port, '0.0.0.0', async () => {
   const ipAddresses = getLocalIpAddresses();
   console.log(`StreamFlow running at:`);

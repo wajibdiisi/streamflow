@@ -10,12 +10,12 @@ class Video {
       db.run(
         `INSERT INTO videos (
           id, title, filepath, thumbnail_path, file_size, 
-          duration, format, resolution, bitrate, fps, user_id, 
+          duration, format, resolution, bitrate, fps, folder_path, user_id, 
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, data.title, data.filepath, data.thumbnail_path, data.file_size,
-          data.duration, data.format, data.resolution, data.bitrate, data.fps, data.user_id,
+          data.duration, data.format, data.resolution, data.bitrate, data.fps, data.folder_path || 'Default', data.user_id,
           now, now
         ],
         function (err) {
@@ -42,8 +42,10 @@ class Video {
   static findAll(userId = null) {
     return new Promise((resolve, reject) => {
       const query = userId ?
-        'SELECT * FROM videos WHERE user_id = ? ORDER BY upload_date DESC' :
-        'SELECT * FROM videos ORDER BY upload_date DESC';
+        `SELECT v.* FROM videos v WHERE v.user_id = ?
+         ORDER BY COALESCE(v.updated_at, v.created_at) DESC` :
+        `SELECT v.* FROM videos v
+         ORDER BY COALESCE(v.updated_at, v.created_at) DESC`;
       const params = userId ? [userId] : [];
       db.all(query, params, (err, rows) => {
         if (err) {
@@ -51,6 +53,20 @@ class Video {
           return reject(err);
         }
         resolve(rows || []);
+      });
+    });
+  }
+  static incrementUsedCount(id, delta) {
+    return new Promise((resolve, reject) => {
+      const change = parseInt(delta, 10);
+      if (isNaN(change)) return resolve(false);
+      const query = 'UPDATE videos SET used_count = MAX(0, used_count + ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+      db.run(query, [change, id], function (err) {
+        if (err) {
+          console.error('Error updating used_count:', err.message);
+          return reject(err);
+        }
+        resolve(this.changes > 0);
       });
     });
   }

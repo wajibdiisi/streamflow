@@ -77,7 +77,7 @@
                   class="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-dark-700 transition-colors">
                   <i class="ti ti-dots-vertical"></i>
                 </button>
-                <div id="folderOptionsMenu" class="hidden absolute right-0 top-10 z-10 w-48 bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
+                <div id="folderOptionsMenu" class="hidden absolute right-0 top-10 z-10 w-56 bg-dark-700 rounded-lg border border-gray-600 shadow-lg">
                   <div class="py-1">
                     <button onclick="renameFolderDialog()" class="w-full text-left px-4 py-2 hover:bg-dark-600 flex items-center">
                       <i class="ti ti-pencil mr-2"></i>
@@ -86,6 +86,11 @@
                     <button onclick="deleteFolderDialog()" class="w-full text-left px-4 py-2 hover:bg-dark-600 text-red-400 flex items-center">
                       <i class="ti ti-trash mr-2"></i>
                       Delete Folder
+                    </button>
+                    <div class="h-px bg-gray-600 mx-2 my-1"></div>
+                    <button onclick="resetAllUsageInCurrentFolder()" class="w-full text-left px-4 py-2 hover:bg-dark-600 text-yellow-400 flex items-center">
+                      <i class="ti ti-rotate-2 mr-2"></i>
+                      Reset Usage (All in Folder)
                     </button>
                   </div>
                 </div>
@@ -112,6 +117,10 @@
                 <button id="bulkDeleteBtn" class="hidden bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
                   <i class="ti ti-trash mr-1"></i>
                   Delete Selected
+                </button>
+                <button id="bulkResetUsageBtn" class="hidden bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded text-sm transition-colors">
+                  <i class="ti ti-rotate-2 mr-1"></i>
+                  Reset Usage
                 </button>
               </div>
             </div>
@@ -432,6 +441,7 @@
                 <i class="ti ti-folder mr-1"></i>
                 <span>${video.folder_path || 'Default'}</span>
               </div>
+              <div class="mt-1 text-xs ${video.used_count > 0 ? 'text-yellow-400' : 'text-gray-500'}">Used in ${video.used_count || 0} stream${(video.used_count||0)!==1?'s':''}</div>
             </div>
           </div>
         </div>
@@ -462,6 +472,7 @@
     const selectAllCheckbox = document.getElementById('selectAllVideos');
     const bulkMoveBtn = document.getElementById('bulkMoveBtn');
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const bulkResetBtn = document.getElementById('bulkResetUsageBtn');
 
     const videosToShow = currentFolder === 'all' ?
       allVideos :
@@ -483,9 +494,11 @@
     if (selectedVideos.length > 0) {
       bulkMoveBtn.classList.remove('hidden');
       bulkDeleteBtn.classList.remove('hidden');
+      if (bulkResetBtn) bulkResetBtn.classList.remove('hidden');
     } else {
       bulkMoveBtn.classList.add('hidden');
       bulkDeleteBtn.classList.add('hidden');
+      if (bulkResetBtn) bulkResetBtn.classList.add('hidden');
     }
 
     // Add floating action bar for selected videos (alternative)
@@ -508,12 +521,38 @@
           <i class="ti ti-trash mr-1"></i>
           Delete All
         </button>
+        <button onclick="resetSelectedUsage()" class="bg-yellow-500/80 hover:bg-yellow-600 px-3 py-1 rounded text-sm transition-colors">
+          <i class="ti ti-rotate-2 mr-1"></i>
+          Reset Usage
+        </button>
         <button onclick="clearSelection()" class="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors">
           <i class="ti ti-x mr-1"></i>
           Clear
         </button>
       `;
       document.body.appendChild(actionBar);
+    }
+  }
+
+  async function resetSelectedUsage() {
+    if (selectedVideos.length === 0) return;
+    if (!confirm(`Reset usage for ${selectedVideos.length} selected video(s)?`)) return;
+    try {
+      const response = await fetch('/api/videos/reset-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedVideos })
+      });
+      const result = await response.json();
+      if (result.success) {
+        showToast('success', 'Usage counters reset');
+        clearSelection();
+        loadVideos();
+      } else {
+        showToast('error', result.error || 'Failed to reset usage');
+      }
+    } catch (e) {
+      showToast('error', 'An error occurred while resetting usage');
     }
   }
 
@@ -741,6 +780,28 @@
     const newName = prompt('Enter new folder name:', currentFolder);
     if (newName && newName.trim() && newName.trim() !== currentFolder) {
       renameFolder(currentFolder, newName.trim());
+    }
+  }
+
+  async function resetAllUsageInCurrentFolder() {
+    const folder = currentFolder === 'all' ? null : currentFolder;
+    if (!folder) {
+      if (!confirm('Reset usage for ALL videos across all folders?')) return;
+    } else {
+      if (!confirm(`Reset usage for all videos in "${folder}"?`)) return;
+    }
+    try {
+      const target = encodeURIComponent(folder || 'all');
+      const response = await fetch(`/api/videos/folders/${target}/reset-usage`, { method: 'POST' });
+      const result = await response.json();
+      if (result.success) {
+        showToast('success', 'Usage counters reset');
+        loadVideos();
+      } else {
+        showToast('error', result.error || 'Failed to reset usage');
+      }
+    } catch (e) {
+      showToast('error', 'An error occurred while resetting usage');
     }
   }
 
@@ -1024,6 +1085,13 @@
     bulkDeleteBtn.addEventListener('click', function() {
       if (selectedVideos.length > 0) {
         deleteSelectedVideos();
+      }
+    });
+
+    // Bulk reset usage button handler
+    bulkResetBtn.addEventListener('click', function() {
+      if (selectedVideos.length > 0) {
+        resetSelectedUsage();
       }
     });
   });

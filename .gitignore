@@ -82,6 +82,12 @@ out
 .nuxt
 dist
 .output
+node_modules
+public/uploads/
+logs/
+
+# ignore real env from repo
+.env
 
 # Gatsby files
 .cache/

@@ -22,8 +22,13 @@
           <option value="Custom">Custom</option>
         </select>
       </div>
+      <button id="delete-all-history" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+        <i class="ti ti-trash"></i>
+        <span class="hidden sm:inline">Delete All</span>
+      </button>
     </div>
   </div>
+  
   
   <div class="bg-gray-800 rounded-lg shadow-md overflow-hidden">
     <div class="overflow-x-auto">
@@ -275,4 +280,41 @@
         }, 300);
       }, 3000);
     }
+
+    // Delete All History functionality
+    document.getElementById('delete-all-history').addEventListener('click', async function() {
+      const confirmation = prompt(
+        '⚠️ WARNING: This will delete ALL stream history entries.\n\n' +
+        'Type "DELETE ALL" (without quotes) to confirm this action:'
+      );
+      
+      if (confirmation !== 'DELETE ALL') {
+        showToast('info', 'Delete cancelled - confirmation not provided');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/history', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('success', data.message);
+          // Reload the page to refresh the history list
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          showToast('error', data.error || 'Failed to delete all history');
+        }
+      } catch (error) {
+        console.error('Error deleting all history:', error);
+        showToast('error', 'Failed to delete all history');
+      }
+    });
   </script>

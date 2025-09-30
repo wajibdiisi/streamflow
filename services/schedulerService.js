@@ -51,6 +51,7 @@ async function checkStreamDurations() {
       return;
     }
     const liveStreams = await Stream.findAll(null, 'live');
+    console.log(`[SchedulerService] Checking ${liveStreams.length} live streams for duration limits`);
     for (const stream of liveStreams) {
       // Skip if stream is already being stopped
       if (streamsBeingStopped.has(stream.id)) {
@@ -63,59 +64,63 @@ async function checkStreamDurations() {
         continue;
       }
       
-      if (typeof stream.duration === 'number' && stream.duration > 0 && stream.start_time) {
-        // Get runtime info from streaming service
-        const runtimeInfo = streamingService.getStreamRuntimeInfo ? 
-          streamingService.getStreamRuntimeInfo(stream.id) : null;
+      // Check if stream should stop based on exp_stop_time with 5 minute tolerance
+      // Only check streams that have duration (exp_stop_time will be null for streams without duration)
+      if (stream.exp_stop_time && stream.duration && stream.duration > 0) {
+        const now = new Date();
+        const expStopTime = new Date(stream.exp_stop_time);
+        const toleranceMs = 5 * 60 * 1000; // 5 minutes tolerance
         
-        // Use current session runtime to compare with remaining minutes stored in DB
-        const currentSessionMinutes = runtimeInfo ? runtimeInfo.currentSessionRuntimeMinutes : null;
-        if (runtimeInfo && currentSessionMinutes !== null && currentSessionMinutes >= stream.duration) {
-          console.log(`Stream ${stream.id} exceeded remaining duration (${currentSessionMinutes}min >= ${stream.duration}min), stopping now`);
+        console.log(`[SchedulerService] Checking stream ${stream.id}: exp_stop_time=${stream.exp_stop_time}, current_time=${now.toISOString()}`);
+        
+        // Check if current time is past exp_stop_time (with tolerance)
+        if (now.getTime() >= (expStopTime.getTime() - toleranceMs)) {
+          console.log(`[SchedulerService] Stream ${stream.id} reached exp_stop_time (with 5min tolerance), stopping now`);
           
           // Mark stream as being stopped to prevent duplicate attempts
           streamsBeingStopped.add(stream.id);
           
           try {
             await streamingService.stopStream(stream.id);
-            console.log(`Successfully stopped stream ${stream.id} due to duration limit`);
+            console.log(`[SchedulerService] Successfully stopped stream ${stream.id} due to exp_stop_time`);
+          } catch (error) {
+            console.error(`[SchedulerService] Failed to stop stream ${stream.id}:`, error);
+            // Remove from being stopped set if failed
+            streamsBeingStopped.delete(stream.id);
+          }
+        } else {
+          // Calculate remaining time until exp_stop_time
+          const remainingMs = expStopTime.getTime() - now.getTime();
+          const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+          
+          if (remainingMinutes > 0) {
+            console.log(`Stream ${stream.id} - Remaining until exp_stop_time: ${remainingMinutes}min`);
+            scheduleStreamTermination(stream.id, remainingMinutes);
+          }
+        }
+      } else if (typeof stream.duration === 'number' && stream.duration > 0 && stream.start_time) {
+        // Fallback to old method if exp_stop_time not available
+        const startTime = new Date(stream.start_time);
+        const durationMs = stream.duration * 60 * 1000;
+        const shouldEndAt = new Date(startTime.getTime() + durationMs);
+        const now = new Date();
+        if (shouldEndAt <= now) {
+          console.log(`Stream ${stream.id} exceeded duration, stopping now`);
+          
+          // Mark stream as being stopped to prevent duplicate attempts
+          streamsBeingStopped.add(stream.id);
+          
+          try {
+            await streamingService.stopStream(stream.id);
+            console.log(`Successfully stopped stream ${stream.id} due to duration limit (fallback method)`);
           } catch (error) {
             console.error(`Failed to stop stream ${stream.id}:`, error);
             // Remove from being stopped set if failed
             streamsBeingStopped.delete(stream.id);
           }
-        } else if (runtimeInfo) {
-          // Calculate remaining time based on tracked runtime
-          const baseline = currentSessionMinutes !== null ? currentSessionMinutes : runtimeInfo.totalRuntimeMinutes;
-          const remainingMinutes = Math.max(0, stream.duration - baseline);
-          if (remainingMinutes > 0) {
-            console.log(`Stream ${stream.id} - Session runtime: ${baseline}min, Remaining: ${remainingMinutes}min`);
-            scheduleStreamTermination(stream.id, remainingMinutes);
-          }
         } else {
-          // Fallback to old method if runtime tracking not available
-          const startTime = new Date(stream.start_time);
-          const durationMs = stream.duration * 60 * 1000;
-          const shouldEndAt = new Date(startTime.getTime() + durationMs);
-          const now = new Date();
-          if (shouldEndAt <= now) {
-            console.log(`Stream ${stream.id} exceeded duration, stopping now`);
-            
-            // Mark stream as being stopped to prevent duplicate attempts
-            streamsBeingStopped.add(stream.id);
-            
-            try {
-              await streamingService.stopStream(stream.id);
-              console.log(`Successfully stopped stream ${stream.id} due to duration limit (fallback method)`);
-            } catch (error) {
-              console.error(`Failed to stop stream ${stream.id}:`, error);
-              // Remove from being stopped set if failed
-              streamsBeingStopped.delete(stream.id);
-            }
-          } else {
-            const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
-            scheduleStreamTermination(stream.id, timeUntilEnd / 60000);
-          }
+          const timeUntilEnd = shouldEndAt.getTime() - now.getTime();
+          scheduleStreamTermination(stream.id, timeUntilEnd / 60000);
         }
       }
     }

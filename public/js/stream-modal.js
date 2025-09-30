@@ -32,6 +32,33 @@ function openNewStreamModal() {
     modal.classList.add('active');
   });
   loadGalleryVideos();
+  
+  // Set default values every time modal opens
+  setDefaultValues();
+}
+
+function setDefaultValues() {
+  // Set default RTMP URL
+  const rtmpInput = document.getElementById('rtmpUrl');
+  if (rtmpInput) {
+    rtmpInput.value = 'rtmp://a.rtmp.youtube.com/live2';
+  }
+  
+  // Set default schedule time: server time + 3 minutes
+  fetch('/api/server-time').then(r => r.json()).then(({ localISO }) => {
+    if (localISO) {
+      const base = new Date(localISO.replace('T', ' ') + ':00');
+      base.setMinutes(base.getMinutes() + 3);
+      const y = base.getFullYear();
+      const m = String(base.getMonth() + 1).padStart(2, '0');
+      const d = String(base.getDate()).padStart(2, '0');
+      const hh = String(base.getHours()).padStart(2, '0');
+      const mm = String(base.getMinutes()).padStart(2, '0');
+      const iso = `${y}-${m}-${d}T${hh}:${mm}`;
+      const sched = document.querySelector('input[type="datetime-local"]');
+      if (sched) sched.value = iso;
+    }
+  }).catch(() => { });
 }
 function closeNewStreamModal() {
   const modal = document.getElementById('newStreamModal');
@@ -65,7 +92,8 @@ function toggleVideoSelector() {
     dropdown.classList.remove('hidden');
     if (!dropdown.dataset.loaded) {
       loadGalleryVideos();
-      dropdown.dataset.loaded = 'true';
+      loadFolderOptions();
+        dropdown.dataset.loaded = 'true';
     }
     const searchInput = document.getElementById('videoSearchInput');
     if (searchInput) {
@@ -135,6 +163,110 @@ function selectVideo(video) {
     hiddenVideoInput.value = video.id;
   }
 }
+
+// Load folder options for video filtering
+function loadFolderOptions() {
+  const folderSelect = document.getElementById('videoFolderSelect');
+  if (!folderSelect) return;
+  
+  // Get unique folders from videos
+  const videos = window.allStreamVideos || [];
+  const folders = [...new Set(videos.map(video => video.folder_path || 'Default'))].sort();
+  
+  // Clear existing options except "All folders"
+  folderSelect.innerHTML = '<option value="all">All folders</option>';
+  
+  // Add folder options
+  folders.forEach(folder => {
+    const option = document.createElement('option');
+    option.value = folder;
+    option.textContent = folder;
+    folderSelect.appendChild(option);
+  });
+  
+  // Add event listener for folder filter
+  folderSelect.addEventListener('change', function() {
+    filterVideos();
+    updateClearFolderButton();
+  });
+  
+  // Add event listener for clear folder button
+  const clearFolderBtn = document.getElementById('clearFolderFilter');
+  if (clearFolderBtn) {
+    clearFolderBtn.addEventListener('click', function() {
+      folderSelect.value = 'all';
+      filterVideos();
+      updateClearFolderButton();
+    });
+  }
+}
+
+// Update clear folder button visibility
+function updateClearFolderButton() {
+  const folderSelect = document.getElementById('videoFolderSelect');
+  const clearBtn = document.getElementById('clearFolderFilter');
+  
+  if (folderSelect && clearBtn) {
+    if (folderSelect.value === 'all') {
+      clearBtn.classList.add('hidden');
+    } else {
+      clearBtn.classList.remove('hidden');
+    }
+  }
+}
+
+// Filter videos based on search, filter, folder, and sort
+function filterVideos() {
+  const searchTerm = document.getElementById('videoSearchInput')?.value.toLowerCase() || '';
+  const filterType = document.getElementById('videoFilterSelect')?.value || 'all';
+  const folderFilter = document.getElementById('videoFolderSelect')?.value || 'all';
+  const sortType = document.getElementById('videoSortSelect')?.value || 'default';
+  
+  let filteredVideos = [...(window.allStreamVideos || [])];
+  
+  // Apply search filter
+  if (searchTerm) {
+    filteredVideos = filteredVideos.filter(video => 
+      video.name.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  // Apply folder filter
+  if (folderFilter !== 'all') {
+    filteredVideos = filteredVideos.filter(video => 
+      (video.folder_path || 'Default') === folderFilter
+    );
+  }
+  
+  // Apply usage filter
+  switch (filterType) {
+    case 'used_gt_0':
+      filteredVideos = filteredVideos.filter(video => video.used_count > 0);
+      break;
+    case 'used_eq_0':
+      filteredVideos = filteredVideos.filter(video => video.used_count === 0);
+      break;
+    case 'in_use':
+      filteredVideos = filteredVideos.filter(video => video.in_use);
+      break;
+  }
+  
+  // Apply sorting
+  switch (sortType) {
+    case 'used_desc':
+      filteredVideos.sort((a, b) => (b.used_count || 0) - (a.used_count || 0));
+      break;
+    case 'used_asc':
+      filteredVideos.sort((a, b) => (a.used_count || 0) - (b.used_count || 0));
+      break;
+    default:
+      // Keep original order
+      break;
+  }
+  
+  // Render filtered videos
+  displayFilteredVideos(filteredVideos);
+}
 async function loadGalleryVideos() {
   try {
     const container = document.getElementById('videoListContainer');
@@ -147,6 +279,7 @@ async function loadGalleryVideos() {
     const videos = await response.json();
     window.allStreamVideos = videos;
     displayFilteredVideos(videos);
+    loadFolderOptions();
     const searchInput = document.getElementById('videoSearchInput');
     if (searchInput) {
       searchInput.removeEventListener('input', handleVideoSearch);
@@ -176,24 +309,45 @@ function handleVideoSearch(e) {
     console.error("No videos available for search");
     return;
   }
-  if (searchTerm === '') {
-    displayFilteredVideos(window.allStreamVideos);
-    return;
-  }
-  const filteredVideos = window.allStreamVideos.filter(video =>
-    video.name.toLowerCase().includes(searchTerm)
-  );
-  console.log(`Found ${filteredVideos.length} matching videos`);
-  displayFilteredVideos(filteredVideos);
+  // Use the unified filterVideos function
+  filterVideos();
 }
 function displayFilteredVideos(videos) {
   const container = document.getElementById('videoListContainer');
   container.innerHTML = '';
+  const controls = getVideoFilterControls();
+  let list = Array.isArray(videos) ? [...videos] : [];
+  // Apply filter
+  if (controls.filter === 'used_gt_0') {
+    list = list.filter(v => (v.used_count || 0) > 0);
+  } else if (controls.filter === 'used_eq_0') {
+    list = list.filter(v => (v.used_count || 0) === 0);
+  } else if (controls.filter === 'in_use') {
+    list = list.filter(v => !!v.in_use);
+  }
+  // Apply sort
+  if (controls.sort === 'used_desc') {
+    list.sort((a,b) => (b.used_count||0) - (a.used_count||0));
+  } else if (controls.sort === 'used_asc') {
+    list.sort((a,b) => (a.used_count||0) - (b.used_count||0));
+  }
   if (videos && videos.length > 0) {
-    videos.forEach(video => {
+    list.forEach(video => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors';
+      const baseCls = 'w-full flex items-center space-x-3 p-2 rounded hover:bg-dark-600 transition-colors overflow-hidden';
+      button.className = baseCls;
+      if (video.in_use) {
+        if (video.stream_status === 'live') {
+          // Neon green highlighter effect for live streams
+          button.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.30), rgba(16,185,129,0.16))';
+          button.style.boxShadow = 'inset 0 0 24px rgba(16,185,129,0.28)';
+        } else if (video.stream_status === 'scheduled') {
+          // Yellow background for scheduled streams
+          button.style.background = 'linear-gradient(135deg, rgba(234,179,8,0.30), rgba(234,179,8,0.16))';
+          button.style.boxShadow = 'inset 0 0 24px rgba(234,179,8,0.28)';
+        }
+      }
       button.onclick = () => selectVideo(video);
       button.innerHTML = `
         <div class="w-16 h-12 bg-dark-800 rounded flex-shrink-0 overflow-hidden">
@@ -204,6 +358,12 @@ function displayFilteredVideos(videos) {
         <div class="flex-1 min-w-0 ml-3">
           <p class="text-sm font-medium text-white truncate">${video.name}</p>
           <p class="text-xs text-gray-400">${video.resolution} • ${video.duration}</p>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs ${video.used_count > 0 ? 'text-yellow-400' : 'text-gray-500'}">Used in ${video.used_count || 0} stream${(video.used_count||0) !== 1 ? 's' : ''} (total)</span>
+            ${video.in_use ? (video.stream_status === 'live' ? 
+              '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-600/20 text-green-300 border border-green-500">Currently Used</span>' : 
+              '<span class="text-[10px] px-1.5 py-0.5 rounded bg-yellow-600/20 text-yellow-300 border border-yellow-500">Scheduled</span>') : ''}
+          </div>
         </div>
       `;
       container.appendChild(button);
@@ -217,6 +377,15 @@ function displayFilteredVideos(videos) {
       </div>
     `;
   }
+}
+
+function getVideoFilterControls() {
+  const filterEl = document.getElementById('videoFilterSelect');
+  const sortEl = document.getElementById('videoSortSelect');
+  return {
+    filter: filterEl ? filterEl.value : 'all',
+    sort: sortEl ? sortEl.value : 'default'
+  };
 }
 function resetModalForm() {
   const form = document.getElementById('newStreamForm');
@@ -236,6 +405,9 @@ function resetModalForm() {
   if (isDropdownOpen) {
     toggleVideoSelector();
   }
+  
+  // Re-set default values after reset
+  setDefaultValues();
 }
 function initModal() {
   const modal = document.getElementById('newStreamModal');
@@ -298,6 +470,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (resolutionSelect) {
     resolutionSelect.addEventListener('change', updateResolutionDisplay);
     setVideoOrientation('horizontal');
+  }
+  const filterSelect = document.getElementById('videoFilterSelect');
+  const sortSelect = document.getElementById('videoSortSelect');
+  if (filterSelect) {
+    filterSelect.addEventListener('change', () => {
+      filterVideos();
+    });
+  }
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      filterVideos();
+    });
   }
 });
 function toggleStreamKeyVisibility() {

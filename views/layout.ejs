@@ -55,7 +55,6 @@
       }
     }
   </script>
-  <script src="/js/stream-modal.js" defer></script>
 </head>
 <body class="bg-dark-900 text-white font-inter">
   <div
@@ -97,10 +96,20 @@
           <span class="text-xs mt-1">Folders</span>
           <span class="sidebar-tooltip group-hover:scale-100">Folder Manager</span>
         </a>
+        <a href="/stream-keys" class="sidebar-icon group <%= active === 'stream-keys' ? 'bg-primary' : '' %>">
+          <i class="ti ti-key text-xl"></i>
+          <span class="text-xs mt-1">Keys</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Stream Key Management</span>
+        </a>
         <a href="/history" class="sidebar-icon group <%= active === 'history' ? 'bg-primary' : '' %>">
           <i class="ti ti-history text-xl"></i>
           <span class="text-xs mt-1">History</span>
           <span class="sidebar-tooltip group-hover:scale-100">Stream History</span>
+        </a>
+        <a href="/telegram-alerts" class="sidebar-icon group <%= active === 'telegram-alerts' ? 'bg-primary' : '' %>">
+          <i class="ti ti-brand-telegram text-xl"></i>
+          <span class="text-xs mt-1">Telegram</span>
+          <span class="sidebar-tooltip group-hover:scale-100">Telegram Alerts</span>
         </a>
       </div>
       <div class="mt-auto">
@@ -212,6 +221,10 @@
       <a href="/gallery" class="bottom-nav-item <%= active === 'gallery' ? 'bottom-nav-active' : '' %>">
         <i class="ti ti-video"></i>
         <span>Gallery</span>
+      </a>
+      <a href="/stream-keys" class="bottom-nav-item <%= active === 'stream-keys' ? 'bottom-nav-active' : '' %>">
+        <i class="ti ti-key"></i>
+        <span>Keys</span>
       </a>
       <a href="/history" class="bottom-nav-item <%= active === 'history' ? 'bottom-nav-active' : '' %>">
         <i class="ti ti-history"></i>

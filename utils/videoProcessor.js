@@ -1,10 +1,13 @@
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const ffmpegConfig = require('./ffmpegConfig');
 const { getVideoDurationInSeconds } = require('get-video-duration');
 const fs = require('fs');
 const path = require('path');
 const { getUniqueFilename, paths } = require('./storage');
-ffmpeg.setFfmpegPath(ffmpegPath);
+
+// Configure fluent-ffmpeg with detected paths
+ffmpeg.setFfmpegPath(ffmpegConfig.getFFmpegPath());
+ffmpeg.setFfprobePath(ffmpegConfig.getFFprobePath());
 const getVideoInfo = async (filepath) => {
   try {
     const duration = await getVideoDurationInSeconds(filepath);

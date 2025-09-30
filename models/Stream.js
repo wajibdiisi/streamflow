@@ -24,17 +24,30 @@ class Stream {
     const use_advanced_settings_int = use_advanced_settings ? 1 : 0;
     const status = schedule_time ? 'scheduled' : 'offline';
     const status_updated_at = new Date().toISOString();
+    
+    // Calculate exp_stop_time only for streams with duration
+    let exp_stop_time = null;
+    if (duration && duration > 0) {
+      if (schedule_time) {
+        // Scheduled stream: schedule_time + duration
+        exp_stop_time = new Date(new Date(schedule_time).getTime() + (duration * 60 * 1000)).toISOString();
+      } else {
+        // Manual stream: current time + duration (will be updated when stream starts)
+        exp_stop_time = new Date(Date.now() + (duration * 60 * 1000)).toISOString();
+      }
+    }
+    
     return new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO streams (
           id, title, video_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video,
-          schedule_time, duration, status, status_updated_at, use_advanced_settings, user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          schedule_time, duration, status, status_updated_at, exp_stop_time, use_advanced_settings, user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id, title, video_id, rtmp_url, stream_key, platform, platform_icon,
           bitrate, resolution, fps, orientation, loop_video_int,
-          schedule_time, duration, status, status_updated_at, use_advanced_settings_int, user_id
+          schedule_time, duration, status, status_updated_at, exp_stop_time, use_advanced_settings_int, user_id
         ],
         function (err) {
           if (err) {
@@ -71,9 +84,13 @@ class Stream {
                v.duration AS video_duration,
                v.resolution AS video_resolution,  
                v.bitrate AS video_bitrate,        
-               v.fps AS video_fps                 
+               v.fps AS video_fps,
+               v.folder_path AS video_folder_path,
+               skg.name AS channel_name
         FROM streams s
         LEFT JOIN videos v ON s.video_id = v.id
+        LEFT JOIN stream_keys sk ON sk.stream_key = s.stream_key AND sk.user_id = s.user_id
+        LEFT JOIN stream_key_groups skg ON sk.group_id = skg.id
       `;
       const params = [];
       if (userId) {
@@ -200,9 +217,12 @@ class Stream {
     return new Promise((resolve, reject) => {
       db.get(
         `SELECT s.*, v.title AS video_title, v.filepath AS video_filepath, 
-                v.thumbnail_path AS video_thumbnail, v.duration AS video_duration
+                v.thumbnail_path AS video_thumbnail, v.duration AS video_duration,
+                skg.name AS channel_name
          FROM streams s
          LEFT JOIN videos v ON s.video_id = v.id
+         LEFT JOIN stream_keys sk ON sk.stream_key = s.stream_key AND sk.user_id = s.user_id
+         LEFT JOIN stream_key_groups skg ON sk.group_id = skg.id
          WHERE s.id = ?`,
         [id],
         (err, row) => {
@@ -221,7 +241,7 @@ class Stream {
   }
   static async isStreamKeyInUse(streamKey, userId, excludeId = null) {
     return new Promise((resolve, reject) => {
-      let query = 'SELECT COUNT(*) as count FROM streams WHERE stream_key = ? AND user_id = ?';
+      let query = "SELECT COUNT(*) as count FROM streams WHERE stream_key = ? AND user_id = ? AND status IN ('live','scheduled')";
       const params = [streamKey, userId];
       if (excludeId) {
         query += ' AND id != ?';
@@ -269,6 +289,82 @@ class Stream {
         }
         resolve(rows || []);
       });
+    });
+  }
+
+  static findActiveByStreamKey(streamKey, userId) {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM streams WHERE stream_key = ? AND user_id = ? AND status = 'live'`,
+        [streamKey, userId],
+        (err, rows) => {
+          if (err) {
+            console.error('Error finding active streams by stream key:', err.message);
+            return reject(err);
+          }
+          if (rows) {
+            rows.forEach(row => {
+              row.loop_video = row.loop_video === 1;
+              row.use_advanced_settings = row.use_advanced_settings === 1;
+            });
+          }
+          resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  static findActiveByUserId(userId) {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM streams WHERE user_id = ? AND status = 'live'`,
+        [userId],
+        (err, rows) => {
+          if (err) {
+            console.error('Error finding active streams by user ID:', err.message);
+            return reject(err);
+          }
+          if (rows) {
+            rows.forEach(row => {
+              row.loop_video = row.loop_video === 1;
+              row.use_advanced_settings = row.use_advanced_settings === 1;
+            });
+          }
+          resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  static updateStopTime(streamId, stopTime) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE streams SET stop_time = ? WHERE id = ?`,
+        [stopTime, streamId],
+        function (err) {
+          if (err) {
+            console.error('Error updating stop time:', err.message);
+            return reject(err);
+          }
+          resolve({ changes: this.changes });
+        }
+      );
+    });
+  }
+
+  static updateExpStopTime(streamId, expStopTime) {
+    return new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE streams SET exp_stop_time = ? WHERE id = ?`,
+        [expStopTime, streamId],
+        function (err) {
+          if (err) {
+            console.error('Error updating exp stop time:', err.message);
+            return reject(err);
+          }
+          resolve({ changes: this.changes });
+        }
+      );
     });
   }
 }

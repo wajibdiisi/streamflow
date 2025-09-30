@@ -1,0 +1,497 @@
+<% layout('layout') -%>
+  
+  <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+    <div>
+      <h2 class="text-2xl font-bold">Telegram Alerts</h2>
+      <p class="text-gray-400 text-sm mt-1">Configure notifications for stream events</p>
+    </div>
+    <div class="flex-shrink-0">
+      <span class="<%= user.telegram_enabled ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' %> px-3 py-1.5 text-sm rounded-full font-medium">
+        <%= user.telegram_enabled ? '✅ Enabled' : '⚠️ Disabled' %>
+      </span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Configuration Card -->
+    <div class="bg-gray-800 rounded-xl p-6 h-fit">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-full bg-white flex items-center justify-center flex-shrink-0">
+          <i class="ti ti-brand-telegram text-2xl" style="color: #26A5E4;"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold">Bot Configuration</h3>
+          <p class="text-sm text-gray-400">Setup your Telegram bot credentials</p>
+        </div>
+      </div>
+
+      <form id="telegram-form" class="space-y-4" action="/telegram-alerts/save" method="post">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <label for="telegram-bot-token" class="block text-sm font-medium text-gray-300">
+              <i class="ti ti-key mr-1.5"></i>Bot Token
+            </label>
+            <input type="text" id="telegram-bot-token" name="botToken"
+              class="bg-dark-900 text-white pl-4 pr-4 py-3 rounded-lg block w-full focus:outline-none focus:ring-2 focus:ring-primary border border-gray-600 transition-colors"
+              placeholder="1234567890:AA..." value="<%= user.telegram_bot_token || '' %>" required>
+            <p class="text-xs text-gray-500">Format: 8347379327:AAGOrX3jTeSbsGmuRqaTcqLnFMaL1EYFTwo</p>
+          </div>
+          
+          <div class="space-y-2">
+            <label for="telegram-chat-id" class="block text-sm font-medium text-gray-300">
+              <i class="ti ti-message-circle mr-1.5"></i>Chat ID
+            </label>
+            <input type="text" id="telegram-chat-id" name="chatId"
+              class="bg-dark-900 text-white pl-4 pr-4 py-3 rounded-lg block w-full focus:outline-none focus:ring-2 focus:ring-primary border border-gray-600 transition-colors"
+              placeholder="123456789 or -100123456789" value="<%= user.telegram_chat_id || '' %>" required>
+            <p class="text-xs text-gray-500">Personal chat ID or group chat ID (negative for groups)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 px-4 py-3 bg-primary hover:bg-blue-600 text-white rounded-lg transition-colors font-medium">
+            <i class="ti ti-device-floppy mr-2"></i>Save Configuration
+          </button>
+          <button type="button" id="telegram-test" class="px-4 py-3 bg-dark-700 hover:bg-dark-600 text-white rounded-lg border border-gray-600 transition-colors font-medium">
+            <i class="ti ti-send mr-2"></i>Test
+          </button>
+          <button type="button" id="telegram-clear" class="px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium">
+            <i class="ti ti-trash mr-2"></i>Clear
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Alert Settings Card -->
+    <div class="bg-gray-800 rounded-xl p-6">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+          <i class="ti ti-bell text-2xl text-white"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold">Alert Settings</h3>
+          <p class="text-sm text-gray-400">Choose which events to monitor</p>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <!-- Master Toggle -->
+        <div class="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
+          <div class="flex items-center gap-3">
+            <i class="ti ti-power text-xl text-gray-400"></i>
+            <div>
+              <h4 class="font-medium">Enable Notifications</h4>
+              <p class="text-xs text-gray-400">Master switch for all alerts</p>
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" name="enabled" <%= user.telegram_enabled ? 'checked' : '' %> class="sr-only peer" form="telegram-form">
+            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+          </label>
+        </div>
+
+        <!-- Event Toggles -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-medium text-gray-300 mb-3">Event Types</h4>
+          
+          <div class="grid gap-3">
+            <div class="event-toggle-card" data-checkbox="alertOnStart">
+              <input type="checkbox" id="alertOnStart" name="alertOnStart" <%= user.telegram_alert_on_start ? 'checked' : '' %> class="hidden" form="telegram-form">
+              <div class="p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 transform hover:scale-[1.02] <%= user.telegram_alert_on_start ? 'bg-green-500/10 border-green-500 text-white shadow-lg shadow-green-500/10' : 'bg-dark-700 border-gray-600 text-gray-300 hover:bg-dark-600 hover:border-gray-500' %>">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full <%= user.telegram_alert_on_start ? 'bg-green-500/20' : 'bg-gray-600' %> flex items-center justify-center">
+                    <i class="ti ti-play text-lg <%= user.telegram_alert_on_start ? 'text-green-400' : 'text-gray-400' %>"></i>
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium">Stream Started</div>
+                    <div class="text-xs opacity-75">Get notified when a stream begins</div>
+                  </div>
+                  <div class="<%= user.telegram_alert_on_start ? 'text-green-400' : 'text-gray-500' %>">
+                    <i class="ti ti-<%= user.telegram_alert_on_start ? 'check' : 'circle' %> text-xl"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="event-toggle-card" data-checkbox="alertOnError">
+              <input type="checkbox" id="alertOnError" name="alertOnError" <%= user.telegram_alert_on_error ? 'checked' : '' %> class="hidden" form="telegram-form">
+              <div class="p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 transform hover:scale-[1.02] <%= user.telegram_alert_on_error ? 'bg-red-500/10 border-red-500 text-white shadow-lg shadow-red-500/10' : 'bg-dark-700 border-gray-600 text-gray-300 hover:bg-dark-600 hover:border-gray-500' %>">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full <%= user.telegram_alert_on_error ? 'bg-red-500/20' : 'bg-gray-600' %> flex items-center justify-center">
+                    <i class="ti ti-alert-triangle text-lg <%= user.telegram_alert_on_error ? 'text-red-400' : 'text-gray-400' %>"></i>
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium">Stream Error</div>
+                    <div class="text-xs opacity-75">Alert on connection issues or crashes</div>
+                  </div>
+                  <div class="<%= user.telegram_alert_on_error ? 'text-red-400' : 'text-gray-500' %>">
+                    <i class="ti ti-<%= user.telegram_alert_on_error ? 'check' : 'circle' %> text-xl"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="event-toggle-card" data-checkbox="alertOnStop">
+              <input type="checkbox" id="alertOnStop" name="alertOnStop" <%= user.telegram_alert_on_stop ? 'checked' : '' %> class="hidden" form="telegram-form">
+              <div class="p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 transform hover:scale-[1.02] <%= user.telegram_alert_on_stop ? 'bg-orange-500/10 border-orange-500 text-white shadow-lg shadow-orange-500/10' : 'bg-dark-700 border-gray-600 text-gray-300 hover:bg-dark-600 hover:border-gray-500' %>">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full <%= user.telegram_alert_on_stop ? 'bg-orange-500/20' : 'bg-gray-600' %> flex items-center justify-center">
+                    <i class="ti ti-square text-lg <%= user.telegram_alert_on_stop ? 'text-orange-400' : 'text-gray-400' %>"></i>
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium">Stream Stopped</div>
+                    <div class="text-xs opacity-75">Know when streams end or are terminated</div>
+                  </div>
+                  <div class="<%= user.telegram_alert_on_stop ? 'text-orange-400' : 'text-gray-500' %>">
+                    <i class="ti ti-<%= user.telegram_alert_on_stop ? 'check' : 'circle' %> text-xl"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FFmpeg Info -->
+  <div class="mt-6 bg-gray-800 rounded-xl p-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <i class="ti ti-video text-primary"></i>FFmpeg Information
+    </h3>
+    <div id="ffmpeg-info" class="text-sm text-gray-300">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+        <span>Loading FFmpeg information...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup Guide -->
+  <div class="mt-6 bg-gray-800 rounded-xl p-6">
+    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <i class="ti ti-info-circle text-primary"></i>Setup Guide
+    </h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+      <div>
+        <h4 class="font-medium text-white mb-2">1. Create a Telegram Bot</h4>
+        <ul class="space-y-1 text-gray-400">
+          <li>• Message @BotFather on Telegram</li>
+          <li>• Send /newbot command</li>
+          <li>• Choose a name and username for your bot</li>
+          <li>• Copy the bot token (long string with numbers and letters)</li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="font-medium text-white mb-2">2. Get Your Chat ID</h4>
+        <ul class="space-y-1 text-gray-400">
+          <li>• Start a chat with your bot</li>
+          <li>• Send any message to the bot</li>
+          <li>• Visit: https://api.telegram.org/bot&lt;YOUR_BOT_TOKEN&gt;/getUpdates</li>
+          <li>• Find "chat":{"id": number in the response</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"
+    class="fixed top-20 right-4 bg-dark-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 hidden flex items-center border-l-4">
+    <i id="toast-icon" class="mr-2"></i>
+    <span id="toast-message"></span>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('telegram-form');
+      const testBtn = document.getElementById('telegram-test');
+      
+      // Add click handlers for event toggle cards
+      const eventToggleCards = document.querySelectorAll('.event-toggle-card');
+      eventToggleCards.forEach(card => {
+        const cardDiv = card.querySelector('div');
+        const checkboxId = card.dataset.checkbox;
+        const checkbox = document.getElementById(checkboxId);
+        
+        if (!checkbox) return;
+        
+        // Update card appearance based on checkbox state
+        function updateCardAppearance() {
+          const isChecked = checkbox.checked;
+          
+          // Remove existing classes
+          cardDiv.classList.remove(
+            'bg-green-500/10', 'border-green-500', 'shadow-lg', 'shadow-green-500/10',
+            'bg-red-500/10', 'border-red-500', 'shadow-red-500/10',
+            'bg-orange-500/10', 'border-orange-500', 'shadow-orange-500/10',
+            'bg-dark-700', 'border-gray-600', 'text-gray-300'
+          );
+          
+          // Update icon and styling based on type and state
+          const icon = cardDiv.querySelector('.w-10 i');
+          const statusIcon = cardDiv.querySelector('.flex-1 + div i');
+          const iconContainer = cardDiv.querySelector('.w-10');
+          
+          if (checkboxId === 'alertOnStart') {
+            if (isChecked) {
+              cardDiv.classList.add('bg-green-500/10', 'border-green-500', 'text-white', 'shadow-lg', 'shadow-green-500/10');
+              iconContainer.classList.remove('bg-gray-600');
+              iconContainer.classList.add('bg-green-500/20');
+              icon.classList.remove('text-gray-400');
+              icon.classList.add('text-green-400');
+              statusIcon.classList.remove('ti-circle', 'text-gray-500');
+              statusIcon.classList.add('ti-check', 'text-green-400');
+            } else {
+              cardDiv.classList.add('bg-dark-700', 'border-gray-600', 'text-gray-300');
+              iconContainer.classList.remove('bg-green-500/20');
+              iconContainer.classList.add('bg-gray-600');
+              icon.classList.remove('text-green-400');
+              icon.classList.add('text-gray-400');
+              statusIcon.classList.remove('ti-check', 'text-green-400');
+              statusIcon.classList.add('ti-circle', 'text-gray-500');
+            }
+          } else if (checkboxId === 'alertOnError') {
+            if (isChecked) {
+              cardDiv.classList.add('bg-red-500/10', 'border-red-500', 'text-white', 'shadow-lg', 'shadow-red-500/10');
+              iconContainer.classList.remove('bg-gray-600');
+              iconContainer.classList.add('bg-red-500/20');
+              icon.classList.remove('text-gray-400');
+              icon.classList.add('text-red-400');
+              statusIcon.classList.remove('ti-circle', 'text-gray-500');
+              statusIcon.classList.add('ti-check', 'text-red-400');
+            } else {
+              cardDiv.classList.add('bg-dark-700', 'border-gray-600', 'text-gray-300');
+              iconContainer.classList.remove('bg-red-500/20');
+              iconContainer.classList.add('bg-gray-600');
+              icon.classList.remove('text-red-400');
+              icon.classList.add('text-gray-400');
+              statusIcon.classList.remove('ti-check', 'text-red-400');
+              statusIcon.classList.add('ti-circle', 'text-gray-500');
+            }
+          } else if (checkboxId === 'alertOnStop') {
+            if (isChecked) {
+              cardDiv.classList.add('bg-orange-500/10', 'border-orange-500', 'text-white', 'shadow-lg', 'shadow-orange-500/10');
+              iconContainer.classList.remove('bg-gray-600');
+              iconContainer.classList.add('bg-orange-500/20');
+              icon.classList.remove('text-gray-400');
+              icon.classList.add('text-orange-400');
+              statusIcon.classList.remove('ti-circle', 'text-gray-500');
+              statusIcon.classList.add('ti-check', 'text-orange-400');
+            } else {
+              cardDiv.classList.add('bg-dark-700', 'border-gray-600', 'text-gray-300');
+              iconContainer.classList.remove('bg-orange-500/20');
+              iconContainer.classList.add('bg-gray-600');
+              icon.classList.remove('text-orange-400');
+              icon.classList.add('text-gray-400');
+              statusIcon.classList.remove('ti-check', 'text-orange-400');
+              statusIcon.classList.add('ti-circle', 'text-gray-500');
+            }
+          }
+        }
+        
+        // Add click handler
+        cardDiv.addEventListener('click', () => {
+          checkbox.checked = !checkbox.checked;
+          updateCardAppearance();
+          
+          // Add animation effect
+          cardDiv.style.transform = 'scale(0.98)';
+          setTimeout(() => {
+            cardDiv.style.transform = '';
+          }, 150);
+        });
+        
+      // Initialize appearance
+      updateCardAppearance();
+    });
+    
+    // Load FFmpeg information
+    loadFFmpegInfo();
+    
+    if (form) {
+        form.addEventListener('submit', (e) => {
+          const token = document.getElementById('telegram-bot-token').value.trim();
+          const chatId = document.getElementById('telegram-chat-id').value.trim();
+          const tokenRegex = /^\d{6,}:[A-Za-z0-9_\-]{20,}$/;
+          if (!tokenRegex.test(token)) {
+            e.preventDefault();
+            showToast('error', 'Invalid Telegram bot token format');
+            return false;
+          }
+          if (!chatId) {
+            e.preventDefault();
+            showToast('error', 'Please enter Telegram chat ID');
+            return false;
+          }
+        });
+      }
+      
+      if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+          const originalText = testBtn.innerHTML;
+          testBtn.disabled = true;
+          testBtn.innerHTML = '<i class="ti ti-loader animate-spin mr-2"></i>Sending...';
+          testBtn.classList.add('opacity-50');
+          
+          try {
+            const res = await fetch('/telegram-alerts/test', { 
+              method: 'POST', 
+              headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRF-Token': '<%= csrfToken %>' 
+              } 
+            });
+            const data = await res.json();
+            if (data.success) {
+              showToast('success', 'Test message sent successfully!');
+            } else {
+              showToast('error', data.error || 'Failed to send test message');
+            }
+          } catch (e) { 
+            showToast('error', 'Failed to send test message');
+          } finally {
+            testBtn.disabled = false;
+            testBtn.innerHTML = originalText;
+            testBtn.classList.remove('opacity-50');
+          }
+        });
+      }
+    });
+    
+    // Function to load FFmpeg information
+    async function loadFFmpegInfo() {
+      try {
+        const response = await fetch('/api/ffmpeg-info');
+        const data = await response.json();
+        
+        const ffmpegInfoDiv = document.getElementById('ffmpeg-info');
+        
+        if (data.success) {
+          const ffmpeg = data.ffmpeg;
+          const ffprobe = data.ffprobe;
+          const platform = data.platform;
+          
+          ffmpegInfoDiv.innerHTML = `
+            <div class="space-y-3">
+              <div class="flex items-center gap-2">
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span class="font-medium text-white">FFmpeg ${ffmpeg.version}</span>
+                <span class="px-2 py-1 bg-${ffmpeg.source === 'local' ? 'blue' : 'purple'}-500/20 text-${ffmpeg.source === 'local' ? 'blue' : 'purple'}-400 text-xs rounded">
+                  ${ffmpeg.source === 'local' ? 'Local' : 'System'}
+                </span>
+                <span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded">
+                  ${platform}
+                </span>
+              </div>
+              
+              <div class="text-xs text-gray-400">
+                <div><strong>FFmpeg Path:</strong> ${ffmpeg.path}</div>
+                <div><strong>FFprobe Path:</strong> ${ffprobe.path}</div>
+                <div><strong>Build:</strong> ${ffmpeg.buildInfo}</div>
+                <div><strong>Available:</strong> ${ffmpeg.available ? '✅' : '❌'} FFmpeg, ${ffprobe.available ? '✅' : '❌'} FFprobe</div>
+              </div>
+              
+              <div class="text-xs">
+                <div class="font-medium text-white mb-1">Libraries:</div>
+                <div class="grid grid-cols-2 gap-1 text-gray-400">
+                  ${Object.entries(ffmpeg.libraries).map(([lib, version]) => 
+                    `<div>${lib}: ${version}</div>`
+                  ).join('')}
+                </div>
+              </div>
+              
+              <details class="text-xs">
+                <summary class="cursor-pointer text-primary hover:text-primary-light">Show full configuration</summary>
+                <pre class="mt-2 p-2 bg-gray-900 rounded text-gray-300 overflow-x-auto">${ffmpeg.configuration}</pre>
+              </details>
+            </div>
+          `;
+        } else {
+          ffmpegInfoDiv.innerHTML = `
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span class="text-red-400">Failed to load FFmpeg info: ${data.error}</span>
+            </div>
+          `;
+        }
+      } catch (error) {
+        const ffmpegInfoDiv = document.getElementById('ffmpeg-info');
+        ffmpegInfoDiv.innerHTML = `
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 bg-red-500 rounded-full"></div>
+            <span class="text-red-400">Error loading FFmpeg info: ${error.message}</span>
+          </div>
+        `;
+      }
+    }
+
+    function showToast(type, message) {
+      const toast = document.getElementById('toast');
+      const toastIcon = document.getElementById('toast-icon');
+      const toastMessage = document.getElementById('toast-message');
+      
+      // Reset classes
+      toast.className = 'fixed top-20 right-4 bg-dark-800 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center border-l-4';
+      
+      if (type === 'success') {
+        toastIcon.className = 'ti ti-check text-green-400 mr-2';
+        toast.classList.add('border-green-400');
+      } else if (type === 'error') {
+        toastIcon.className = 'ti ti-x text-red-400 mr-2';
+        toast.classList.add('border-red-400');
+      }
+      
+      toastMessage.textContent = message;
+      toast.classList.remove('hidden');
+      
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 5000);
+    }
+
+    <% if (typeof success !== 'undefined' && success) { %>
+      showToast('success', '<%= success %>');
+    <% } %>
+    <% if (typeof error !== 'undefined' && error) { %>
+      showToast('error', '<%= error %>');
+    <% } %>
+
+    // Clear API Information functionality
+    const clearBtn = document.getElementById('telegram-clear');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        const confirmation = confirm(
+          '⚠️ WARNING: This will clear ALL Telegram API information.\n\n' +
+          'This action cannot be undone. Are you sure you want to continue?'
+        );
+        
+        if (!confirmation) {
+          showToast('info', 'Clear cancelled');
+          return;
+        }
+
+        try {
+          const response = await fetch('/telegram-alerts/clear', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            showToast('success', 'Telegram API information cleared successfully!');
+            // Reload the page to refresh the form
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            showToast('error', 'Failed to clear Telegram API information');
+          }
+        } catch (error) {
+          console.error('Error clearing Telegram API:', error);
+          showToast('error', 'Failed to clear Telegram API information');
+        }
+      });
+    }
+  </script>
