@@ -85,6 +85,7 @@ dist
 node_modules
 public/uploads/
 logs/
+bin/
 
 # ignore real env from repo
 .env
