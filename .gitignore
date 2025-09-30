@@ -21,7 +21,6 @@ lib-cov
 # Coverage directory used by tools like istanbul
 coverage
 *.lcov
-db/
 
 # nyc test coverage
 .nyc_output
@@ -83,6 +82,14 @@ out
 .nuxt
 dist
 .output
+node_modules
+public/uploads/
+logs/
+bin/
+db/
+
+# ignore real env from repo
+.env
 
 # Gatsby files
 .cache/
